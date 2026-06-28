@@ -13,7 +13,6 @@ const descuentosRoutes = require('./routes/descuentos.routes');
 const turnosRoutes = require('./routes/turnos.routes');
 const configuracionRoutes = require('./routes/configuracion.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
-const { UPLOADS_DIR } = require('./services/almacenamiento.service');
 
 const app = express();
 
@@ -37,7 +36,8 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
-app.use('/uploads', express.static(UPLOADS_DIR));
+// Selfies/fotos van a Supabase Storage (URL completa devuelta por almacenamiento.service.js),
+// no a disco local — Render no tiene filesystem persistente entre redeploys.
 
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 300 });
 app.use('/api', apiLimiter);
