@@ -27,7 +27,7 @@ function ConfigurarDispositivo({ onConfigurado }) {
       <div className="tarjeta">
         <h1>Configurar este teléfono</h1>
         <p className="ayuda">
-          Pedile a RRHH el código de activación que te dieron al enrolarte. Se ingresa una sola vez.
+          Pedí el código de activación que te dieron al enrolarte. Se ingresa una sola vez.
         </p>
         <form onSubmit={manejarSubmit}>
           <textarea

@@ -30,7 +30,7 @@ function Login() {
   return (
     <div className="login-page">
       <form className="login-form" onSubmit={manejarSubmit}>
-        <h1>Control de Asistencia — RRHH</h1>
+        <h1>Control de Asistencia</h1>
         <label>
           Email
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />

@@ -4,13 +4,6 @@ import { useCamara } from '../lib/useCamara';
 import { request, ApiError } from '../lib/api';
 import { obtenerUbicacion } from '../lib/geolocalizacion';
 
-const TEXTO_RETO = {
-  PARPADEO: 'Parpadeá normalmente 👁️',
-  GIRO_IZQUIERDA: 'Girá la cabeza a la izquierda ⬅️',
-  GIRO_DERECHA: 'Girá la cabeza a la derecha ➡️',
-  SONREIR: 'Sonreí 😊',
-};
-
 const SEGUNDOS_PARA_CAPTURAR = 3;
 
 function PasoEscaneo({ onDetectado }) {
@@ -55,7 +48,7 @@ function PasoEscaneo({ onDetectado }) {
   );
 }
 
-function PasoSelfie({ tipoReto, onCapturada }) {
+function PasoSelfie({ onCapturada }) {
   const { videoRef, listo, error, capturarFrame } = useCamara('user');
   const [cuenta, setCuenta] = useState(SEGUNDOS_PARA_CAPTURAR);
   const yaCapturadaRef = useRef(false);
@@ -81,7 +74,7 @@ function PasoSelfie({ tipoReto, onCapturada }) {
 
   return (
     <div className="paso-camara">
-      <h1>{TEXTO_RETO[tipoReto] || 'Mirá a la cámara'}</h1>
+      <h1>Mirá a la cámara</h1>
       {error && <p className="error">{error}</p>}
       <video ref={videoRef} className="video-camara espejado" muted playsInline />
       {listo && (
@@ -186,7 +179,7 @@ function Marcar({ deviceToken }) {
   }
 
   if (paso === 'reto') {
-    return <PasoSelfie tipoReto={reto?.tipoReto} onCapturada={manejarSelfieCapturada} />;
+    return <PasoSelfie onCapturada={manejarSelfieCapturada} />;
   }
 
   if (paso === 'enviando') {
@@ -204,7 +197,7 @@ function Marcar({ deviceToken }) {
         <div className="tarjeta resultado">
           <p className="icono-resultado">{exito ? '✅' : '⚠️'}</p>
           <h1>{resultado.tipo === 'ENTRADA' ? 'Entrada registrada' : 'Salida registrada'}</h1>
-          {!exito && <p className="ayuda">Quedó marcada para revisión de RRHH, pero tu marca ya quedó guardada.</p>}
+          {!exito && <p className="ayuda">Quedó marcada para revisión, pero tu marca ya quedó guardada.</p>}
           <button type="button" onClick={reintentar}>Volver a marcar</button>
         </div>
       </div>

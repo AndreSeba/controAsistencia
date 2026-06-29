@@ -24,7 +24,7 @@ function Layout() {
         <nav>
           <NavLink to="/hoy">Hoy</NavLink>
           <NavLink to="/sucursales">Sucursales</NavLink>
-          <NavLink to="/empleados">Empleados</NavLink>
+          <NavLink to="/empleados">Personal</NavLink>
           <NavLink to="/marcaciones">Marcaciones</NavLink>
           <NavLink to="/descuentos">Descuentos</NavLink>
           <NavLink to="/turnos">Turnos</NavLink>

@@ -23,7 +23,7 @@ async function run() {
   const hash = await bcrypt.hash(PASSWORD, 12);
   await pool.query(
     'INSERT INTO usuarios (nombre, email, password_hash, rol_id) VALUES ($1, $2, $3, $4)',
-    ['RRHH Admin', EMAIL, hash, rolId]
+    ['Administrador', EMAIL, hash, rolId]
   );
 
   console.log(`Usuario rrhh_admin creado: ${EMAIL} / ${PASSWORD} (cambiar en producción)`);

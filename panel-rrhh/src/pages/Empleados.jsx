@@ -111,7 +111,7 @@ function Empleados() {
 
   return (
     <div className="page">
-      <h1>Empleados</h1>
+      <h1>Personal</h1>
       {error && <p className="error">{error}</p>}
       {tokenEmitido && (
         <p className="aviso">
@@ -120,7 +120,7 @@ function Empleados() {
         </p>
       )}
 
-      <button type="button" className="boton-nuevo" onClick={abrirCrear}>+ Nuevo empleado</button>
+      <button type="button" className="boton-nuevo" onClick={abrirCrear}>+ Agregar personal</button>
 
       <input
         ref={fotoInputRef}
@@ -164,7 +164,7 @@ function Empleados() {
         </tbody>
       </table>
 
-      <Modal abierto={modalAbierto} titulo="Nuevo empleado" onCerrar={() => setModalAbierto(false)}>
+      <Modal abierto={modalAbierto} titulo="Agregar personal" onCerrar={() => setModalAbierto(false)}>
         <form onSubmit={crear}>
           <label className="campo">
             Nombre
