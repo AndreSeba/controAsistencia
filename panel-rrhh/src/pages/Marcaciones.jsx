@@ -126,7 +126,11 @@ function Marcaciones() {
         <tbody>
           {datosPaginados.map((m) => (
             <tr key={m.id} className={m.estado === 'requiere_revision' && !m.revisado ? 'fila-alerta' : ''}>
-              <td><img className="selfie-miniatura" src={m.selfie_url} alt="selfie" /></td>
+              <td>
+                {m.selfie_url
+                  ? <img className="selfie-miniatura" src={m.selfie_url} alt="selfie" onError={e => { e.currentTarget.style.display = 'none'; }} />
+                  : <span className="selfie-vacia">—</span>}
+              </td>
               <td>{m.empleado_nombre}</td>
               <td>{m.empleado_apellido}</td>
               <td>{m.empleado_documento_nro}</td>

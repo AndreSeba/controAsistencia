@@ -27,4 +27,14 @@ async function listar() {
   return result.rows;
 }
 
-module.exports = { buscarPorMinutosAtraso, listar };
+async function actualizar(id, montoBs) {
+  const pool = getPool();
+  const result = await pool.query(
+    `UPDATE regla_descuento SET monto_bs = $1 WHERE id = $2
+     RETURNING id, banda_min, banda_max, monto_bs, vigente_desde`,
+    [montoBs, id]
+  );
+  return result.rows[0] || null;
+}
+
+module.exports = { buscarPorMinutosAtraso, listar, actualizar };

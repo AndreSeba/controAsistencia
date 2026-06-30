@@ -405,3 +405,477 @@ input:focus-visible, select:focus-visible {
 .txt-mal { color: var(--error); }
 
 :root[data-tema="oscuro"] .txt-ok { color: #4ade80; }
+
+/* ── Asistencia semanal ── */
+.asistencia-controles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.semana-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.semana-label {
+  font-size: 15px;
+  font-weight: 600;
+  min-width: 200px;
+  text-align: center;
+}
+.btn-hoy {
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.asistencia-tabla-wrapper {
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
+.asistencia-tabla { table-layout: auto; }
+
+.asistencia-tabla .col-empleado {
+  white-space: nowrap;
+  min-width: 160px;
+}
+.asistencia-tabla .col-dia {
+  text-align: center;
+  min-width: 110px;
+  vertical-align: middle;
+}
+.asistencia-tabla thead .col-hoy {
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.emp-nombre { display: block; font-weight: 500; }
+.emp-doc    { display: block; font-size: 11px; color: var(--text-muted); }
+
+/* Chips de estado */
+.asistencia-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 7px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  margin: 2px;
+  transition: opacity 140ms ease;
+}
+.asistencia-chip:hover { opacity: 0.8; }
+
+.asistencia-chip--a_tiempo  { background: #dcfce7; color: #166534; }
+.asistencia-chip--atraso    { background: #fef9c3; color: #854d0e; }
+.asistencia-chip--sin_salida{ background: #fee2e2; color: #991b1b; }
+.asistencia-chip--revision  { background: #ffedd5; color: #9a3412; }
+
+:root[data-tema="oscuro"] .asistencia-chip--a_tiempo   { background: #14532d; color: #86efac; }
+:root[data-tema="oscuro"] .asistencia-chip--atraso     { background: #422006; color: #fde68a; }
+:root[data-tema="oscuro"] .asistencia-chip--sin_salida { background: #450a0a; color: #fca5a5; }
+:root[data-tema="oscuro"] .asistencia-chip--revision   { background: #431407; color: #fdba74; }
+
+.chip-turno {
+  font-size: 9px;
+  opacity: 0.7;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.chip-vacio { color: var(--text-muted); font-size: 13px; }
+
+/* Panel de detalle */
+.asistencia-detalle {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  max-width: 420px;
+}
+.asistencia-detalle-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+.asistencia-detalle-body { display: flex; flex-direction: column; gap: 6px; }
+.detalle-fila {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+.detalle-fila:last-child { border-bottom: none; }
+.detalle-fila span:first-child { color: var(--text-muted); }
+
+.asistencia-leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ── Vista tabs (Dashboard / Asistencia) ─────────────────── */
+.vista-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 2px;
+}
+.vista-tabs button {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 4px 4px 0 0;
+  margin: 0;
+  transition: color 150ms, background 150ms;
+}
+.vista-tabs button:hover { color: var(--text); background: var(--accent-bg); }
+.vista-tabs button.active {
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+  margin-bottom: -4px;
+  background: transparent;
+}
+
+/* ── AsistenciaPersonal controles ────────────────────────── */
+.ap-controles {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.mes-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mes-nav button {
+  padding: 4px 10px;
+  font-size: 13px;
+  margin: 0;
+}
+.mes-label {
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 130px;
+  text-align: center;
+}
+
+/* ── Lista de cards (grid 2 col) ─────────────────────────── */
+.ap-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+/* ── Card del empleado ───────────────────────────────────── */
+.ap-card {
+  padding: 12px;
+  margin-bottom: 0;
+}
+.ap-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.ap-nombre {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 1px;
+}
+
+/* Stats row */
+.ap-stats {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ap-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 36px;
+  padding: 4px 7px;
+  border-radius: 5px;
+  font-size: 11px;
+}
+.ap-stat-num {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+}
+.ap-stat-lbl { opacity: 0.75; margin-top: 1px; }
+
+.ap-stat--baja_medica { background: #bfdbfe; color: #1e3a5f; }
+.ap-stat--permiso     { background: #d9f99d; color: #1a3a00; }
+:root[data-tema="oscuro"] .ap-stat--baja_medica { background: #1e3a5f; color: #bfdbfe; }
+:root[data-tema="oscuro"] .ap-stat--permiso     { background: #1a3a00; color: #d9f99d; }
+
+/* ── Modal de novedad ────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+.modal-caja {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  min-width: 300px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.novedad-opciones {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.novedad-opcion {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 7px;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: border-color 120ms, background 120ms;
+}
+.novedad-opcion input[type="radio"] { accent-color: var(--accent); }
+.novedad-opcion--baja_medica.activa { background: #bfdbfe; border-color: #3b82f6; color: #1e3a5f; }
+.novedad-opcion--permiso.activa     { background: #d9f99d; border-color: #65a30d; color: #1a3a00; }
+:root[data-tema="oscuro"] .novedad-opcion--baja_medica.activa { background: #1e3a5f; border-color: #3b82f6; color: #bfdbfe; }
+:root[data-tema="oscuro"] .novedad-opcion--permiso.activa     { background: #1a3a00; border-color: #65a30d; color: #d9f99d; }
+
+.novedad-nota {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  resize: none;
+  margin-bottom: 14px;
+}
+.novedad-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.btn-quitar {
+  color: var(--error);
+  border-color: var(--error);
+  background: transparent;
+  margin-right: auto;
+}
+
+/* ── Paginación ──────────────────────────────────────────── */
+.ap-paginacion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.ap-paginacion button { margin: 0; padding: 4px 10px; }
+
+.ap-stat--ok       { background: #d1fae5; color: #065f46; }
+.ap-stat--tarde    { background: #fef9c3; color: #78350f; }
+.ap-stat--revision { background: #ffedd5; color: #9a3412; }
+.ap-stat--falta    { background: #fee2e2; color: #7f1d1d; }
+
+:root[data-tema="oscuro"] .ap-stat--ok       { background: #14532d; color: #86efac; }
+:root[data-tema="oscuro"] .ap-stat--tarde    { background: #422006; color: #fde68a; }
+:root[data-tema="oscuro"] .ap-stat--revision { background: #431407; color: #fdba74; }
+:root[data-tema="oscuro"] .ap-stat--falta    { background: #450a0a; color: #fca5a5; }
+
+/* ── Calendario ──────────────────────────────────────────── */
+.cal-wrapper { margin-top: 4px; }
+
+.cal-hdr {
+  display: grid;
+  grid-template-columns: repeat(7, 18px);
+  gap: 3px;
+  margin-bottom: 3px;
+}
+.cal-hdr-dia {
+  width: 18px;
+  text-align: center;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 18px);
+  gap: 3px;
+}
+
+.cal-dia {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  cursor: default;
+  transition: opacity 120ms;
+}
+.cal-dia:hover { opacity: 0.75; }
+
+/* Day state colors */
+.cal-dia--ok         { background: #bbf7d0; }
+.cal-dia--tarde      { background: #fef08a; }
+.cal-dia--revision   { background: #fed7aa; }
+.cal-dia--falta      { background: #fecaca; }
+.cal-dia--finde      { background: var(--bg); border: 1px solid var(--border); }
+.cal-dia--vacio      { background: transparent; }
+.cal-dia--baja_medica { background: #bfdbfe; }
+.cal-dia--permiso     { background: #d9f99d; }
+
+.cal-dia--clickeable  { cursor: pointer; }
+.cal-dia--clickeable:hover { opacity: 0.65; outline: 2px solid currentColor; outline-offset: 1px; }
+
+:root[data-tema="oscuro"] .cal-dia--ok         { background: #14532d; }
+:root[data-tema="oscuro"] .cal-dia--tarde      { background: #422006; }
+:root[data-tema="oscuro"] .cal-dia--revision   { background: #431407; }
+:root[data-tema="oscuro"] .cal-dia--falta      { background: #450a0a; }
+:root[data-tema="oscuro"] .cal-dia--finde      { background: var(--bg-card); border-color: var(--border); }
+:root[data-tema="oscuro"] .cal-dia--baja_medica { background: #1e3a5f; }
+:root[data-tema="oscuro"] .cal-dia--permiso     { background: #1a3a00; }
+
+/* ── Leyenda del calendario ──────────────────────────────── */
+.cal-leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  align-items: center;
+}
+.cal-leyenda span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.cal-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.cal-dot--ok         { background: #bbf7d0; }
+.cal-dot--tarde      { background: #fef08a; }
+.cal-dot--revision   { background: #fed7aa; }
+.cal-dot--falta      { background: #fecaca; }
+.cal-dot--finde      { background: var(--border); }
+.cal-dot--baja_medica { background: #bfdbfe; }
+.cal-dot--permiso     { background: #d9f99d; }
+
+:root[data-tema="oscuro"] .cal-dot--ok       { background: #14532d; }
+:root[data-tema="oscuro"] .cal-dot--tarde    { background: #422006; }
+:root[data-tema="oscuro"] .cal-dot--revision { background: #431407; }
+:root[data-tema="oscuro"] .cal-dot--falta    { background: #450a0a; }
+:root[data-tema="oscuro"] .cal-dot--finde    { background: var(--border); }
+
+.ayuda {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: 8px 0;
+}
+
+/* ── Tarifas de atraso ───────────────────────────────────── */
+.tarifas-card {
+  margin-bottom: 16px;
+}
+.tarifas-summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 15px;
+  padding: 4px 2px;
+  user-select: none;
+  list-style: none;
+}
+.tarifas-summary::before {
+  content: '▶ ';
+  font-size: 11px;
+  color: var(--text-muted);
+}
+details[open] .tarifas-summary::before {
+  content: '▼ ';
+}
+.tarifas-tabla {
+  margin: 12px 0 10px;
+}
+.tarifas-tabla td:last-child {
+  width: 120px;
+}
+.tarifa-input {
+  width: 90px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  text-align: right;
+}
+.tarifa-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.tarifas-acciones {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: flex-end;
+}
+.tarifa-ok {
+  color: #166534;
+  font-size: 13px;
+  font-weight: 600;
+}
+:root[data-tema="oscuro"] .tarifa-ok { color: #4ade80; }

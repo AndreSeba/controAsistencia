@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import { descargarBlob } from '../lib/api';
 import { usePaginacion } from '../hooks/usePaginacion';
@@ -13,6 +13,99 @@ const SIGUIENTE_ACCION = {
   calculado: 'Aprobar',
   aprobado: 'Aplicar',
 };
+
+// ── Sección de tarifas ─────────────────────────────────────
+function TarifasAtraso({ request }) {
+  const [reglas, setReglas] = useState([]);
+  const [montos, setMontos] = useState({});   // { id: valorEditado }
+  const [guardando, setGuardando] = useState(false);
+  const [errorTarifas, setErrorTarifas] = useState(null);
+  const [ok, setOk] = useState(false);
+
+  const cargarReglas = useCallback(async () => {
+    try {
+      const data = await request('/descuentos/reglas');
+      setReglas(data);
+      const init = {};
+      data.forEach(r => { init[r.id] = String(r.monto_bs); });
+      setMontos(init);
+    } catch (err) {
+      setErrorTarifas(err.message);
+    }
+  }, [request]);
+
+  useEffect(() => { cargarReglas(); }, [cargarReglas]);
+
+  const sucias = reglas.filter(r => Number(montos[r.id]) !== Number(r.monto_bs));
+
+  async function guardar() {
+    setGuardando(true);
+    setErrorTarifas(null);
+    setOk(false);
+    try {
+      await Promise.all(
+        sucias.map(r =>
+          request(`/descuentos/reglas/${r.id}`, { method: 'PUT', body: { monto_bs: Number(montos[r.id]) } })
+        )
+      );
+      await cargarReglas();
+      setOk(true);
+      setTimeout(() => setOk(false), 3000);
+    } catch (err) {
+      setErrorTarifas(err.message);
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  function labelBanda(r) {
+    if (r.banda_min === 0) return `0 – ${r.banda_max} min`;
+    if (r.banda_max === null) return `Más de ${r.banda_min - 1} min`;
+    return `${r.banda_min} – ${r.banda_max} min`;
+  }
+
+  return (
+    <details className="card tarifas-card">
+      <summary className="tarifas-summary">Tarifas de atraso</summary>
+      {errorTarifas && <p className="error">{errorTarifas}</p>}
+      <table className="tabla tarifas-tabla">
+        <thead>
+          <tr><th>Rango de atraso</th><th>Descuento (Bs)</th></tr>
+        </thead>
+        <tbody>
+          {reglas.map(r => (
+            <tr key={r.id}>
+              <td>
+                {labelBanda(r)}
+                {r.banda_min === 0 && <span className="ayuda"> — tolerancia</span>}
+              </td>
+              <td>
+                <input
+                  type="number"
+                  className="tarifa-input"
+                  min="0"
+                  step="0.5"
+                  value={montos[r.id] ?? ''}
+                  onChange={e => setMontos(prev => ({ ...prev, [r.id]: e.target.value }))}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="tarifas-acciones">
+        {ok && <span className="tarifa-ok">✓ Guardado</span>}
+        <button
+          type="button"
+          onClick={guardar}
+          disabled={guardando || sucias.length === 0}
+        >
+          {guardando ? 'Guardando…' : `Guardar${sucias.length > 0 ? ` (${sucias.length} cambio${sucias.length > 1 ? 's' : ''})` : ''}`}
+        </button>
+      </div>
+    </details>
+  );
+}
 
 function Descuentos() {
   const { request } = useAuth();
@@ -88,6 +181,7 @@ function Descuentos() {
     <div className="page">
       <h1>Descuentos por atraso</h1>
       <p className="subtitulo">Los montos se calculan solos según los minutos de atraso. Nada se aplica hasta que lo apruebes acá.</p>
+      <TarifasAtraso request={request} />
       {error && <p className="error">{error}</p>}
 
       <div className="filtros filtros-fila filtros-wrap">

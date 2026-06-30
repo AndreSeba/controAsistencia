@@ -13,6 +13,7 @@ const descuentosRoutes = require('./routes/descuentos.routes');
 const turnosRoutes = require('./routes/turnos.routes');
 const configuracionRoutes = require('./routes/configuracion.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
+const novedadRoutes = require('./routes/novedad.routes');
 
 const app = express();
 
@@ -55,6 +56,7 @@ app.use('/api/descuentos', descuentosRoutes);
 app.use('/api/turnos', turnosRoutes);
 app.use('/api/configuracion', configuracionRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/novedades', novedadRoutes);
 
 app.use((err, req, res, _next) => {
   console.error(err);

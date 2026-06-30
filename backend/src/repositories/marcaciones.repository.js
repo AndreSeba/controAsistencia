@@ -130,4 +130,47 @@ async function obtenerRankingAtrasos(fechaInicio, fechaFin) {
   };
 }
 
-module.exports = { crear, listar, obtenerPorId, marcarRevisado, obtenerRankingAtrasos };
+async function asistenciaSemanal({ fechaInicio, fechaFin, sucursalId, turnoId, empleadoId } = {}) {
+  const pool = getPool();
+  const params = [fechaInicio, fechaFin];
+  const extras = [];
+  if (sucursalId) { params.push(sucursalId); extras.push(`AND tj.sucursal_id = $${params.length}`); }
+  if (turnoId)    { params.push(turnoId);    extras.push(`AND tj.turno_catalogo_id = $${params.length}`); }
+  if (empleadoId) { params.push(empleadoId); extras.push(`AND tj.empleado_id = $${params.length}`); }
+
+  const result = await pool.query(
+    `SELECT
+       e.id            AS empleado_id,
+       e.nombre        AS empleado_nombre,
+       e.apellido      AS empleado_apellido,
+       e.documento_nro AS empleado_documento_nro,
+       tj.id           AS jornada_id,
+       tj.fecha,
+       tc.id           AS turno_id,
+       tc.nombre       AS turno_nombre,
+       tj.sucursal_id,
+       s.nombre        AS sucursal_nombre,
+       tj.requiere_revision,
+       tj.cierre_automatico,
+       tj.salida_marcada,
+       tj.estado       AS jornada_estado,
+       m_e.timestamp_utc AS hora_entrada,
+       m_e.minutos_atraso,
+       m_e.minutos_anticipacion,
+       m_e.identidad_verificada,
+       m_s.timestamp_utc AS hora_salida
+     FROM turno_jornada tj
+     JOIN empleado       e  ON e.id  = tj.empleado_id
+     JOIN turno_catalogo tc ON tc.id = tj.turno_catalogo_id
+     JOIN sucursal       s  ON s.id  = tj.sucursal_id
+     LEFT JOIN marcacion m_e ON m_e.turno_jornada_id = tj.id AND m_e.tipo = 'ENTRADA'
+     LEFT JOIN marcacion m_s ON m_s.turno_jornada_id = tj.id AND m_s.tipo = 'SALIDA'
+     WHERE tj.fecha >= $1 AND tj.fecha <= $2
+       ${extras.join(' ')}
+     ORDER BY e.apellido, e.nombre, tj.fecha, tc.hora_inicio`,
+    params
+  );
+  return result.rows;
+}
+
+module.exports = { crear, listar, obtenerPorId, marcarRevisado, obtenerRankingAtrasos, asistenciaSemanal };

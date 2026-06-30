@@ -16,4 +16,14 @@ async function ranking(req, res, next) {
   }
 }
 
-module.exports = { resumen, ranking };
+async function asistencia(req, res, next) {
+  try {
+    const { fechaInicio, fechaFin, sucursalId, turnoId, empleadoId } = req.query;
+    if (!fechaInicio || !fechaFin) return res.status(400).json({ error: 'fechaInicio y fechaFin son requeridos' });
+    res.json(await dashboardService.asistenciaSemanal({ fechaInicio, fechaFin, sucursalId, turnoId, empleadoId }));
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { resumen, ranking, asistencia };

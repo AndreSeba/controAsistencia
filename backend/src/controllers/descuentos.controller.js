@@ -52,4 +52,26 @@ async function exportarReporte(req, res, next) {
   }
 }
 
-module.exports = { listar, reporte, avanzar, exportarReporte };
+async function listarReglas(req, res, next) {
+  try {
+    res.json(await descuentosService.listarReglas());
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function actualizarRegla(req, res, next) {
+  try {
+    const regla = await descuentosService.actualizarRegla(
+      Number(req.params.id),
+      req.body.monto_bs,
+      req.usuario.id,
+      req.ip,
+    );
+    res.json(regla);
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { listar, reporte, avanzar, exportarReporte, listarReglas, actualizarRegla };

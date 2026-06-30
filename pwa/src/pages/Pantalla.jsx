@@ -46,17 +46,16 @@ function Pantalla() {
         // totp-generator por defecto espera base32, pero podemos pasarle raw string
         // o mejor usar una configuración si está disponible. 
         // Asumiendo que totp-generator genera a partir del string proporcionado.
-        let token = "ERROR";
         try {
-          // La libreria totp-generator actual devuelve un objeto { otp, expires }
-          const { otp, expires } = TOTP.generate(secret, { digits: 6, period: 30, timestamp: now });
-          token = otp;
-          
-          const payload = JSON.stringify({ sucursalId: Number(sucursalId), token });
+          const { otp } = await TOTP.generate(secret, { digits: 6, period: 30, timestamp: now });
+
+          const payload = JSON.stringify({ sucursalId: Number(sucursalId), token: otp });
           await QRCode.toCanvas(canvasRef.current, payload, { width: 320, margin: 1 });
-          
-          const restante = Math.max(0, Math.round((expires - now) / 1000));
-          setSegundosRestantes(restante);
+
+          // Calcula segundos restantes sin depender del campo expires de la librería
+          const PERIOD = 30;
+          const nowSeg = Math.floor(now / 1000);
+          setSegundosRestantes(PERIOD - (nowSeg % PERIOD));
         } catch(e) {
           console.error('Error generando TOTP:', e);
           if (activo) setError('Error interno generando QR. Revise la llave secreta.');

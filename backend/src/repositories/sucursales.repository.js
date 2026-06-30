@@ -1,4 +1,10 @@
+const crypto = require('crypto');
 const { getPool } = require('../config/db');
+
+const BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+function generarTotpSecret() {
+  return Array.from(crypto.randomBytes(32)).map(b => BASE32[b % 32]).join('');
+}
 
 async function listar(incluirInactivas) {
   const pool = getPool();
@@ -26,12 +32,16 @@ async function obtenerPorId(id, executor = getPool()) {
 
 async function crear({ nombre, geoLat, geoLng, geoRadioM, wifiBssid, usuarioId }, executor = getPool()) {
   const result = await executor.query(
-    `INSERT INTO sucursal (nombre, geo_lat, geo_lng, geo_radio_m, wifi_bssid, geo_actualizado_por)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO sucursal (nombre, geo_lat, geo_lng, geo_radio_m, wifi_bssid, geo_actualizado_por, totp_secret)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING id`,
-    [nombre, geoLat, geoLng, geoRadioM, wifiBssid || null, usuarioId]
+    [nombre, geoLat, geoLng, geoRadioM, wifiBssid || null, usuarioId, generarTotpSecret()]
   );
   return result.rows[0].id;
+}
+
+async function guardarTotpSecret(id, secret, executor = getPool()) {
+  await executor.query('UPDATE sucursal SET totp_secret = $1 WHERE id = $2', [secret, id]);
 }
 
 async function actualizarDatos(id, { nombre, activo }, executor = getPool()) {
@@ -55,4 +65,4 @@ async function actualizarGeocerca(id, { geoLat, geoLng, geoRadioM, wifiBssid, us
   );
 }
 
-module.exports = { listar, obtenerPorId, crear, actualizarDatos, actualizarGeocerca };
+module.exports = { listar, obtenerPorId, crear, actualizarDatos, actualizarGeocerca, guardarTotpSecret, generarTotpSecret };

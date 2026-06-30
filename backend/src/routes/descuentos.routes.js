@@ -10,6 +10,8 @@ router.use(verificarAccessToken);
 router.get('/', requierePermiso('descuentos', 'puede_ver'), descuentosController.listar);
 router.get('/reporte', requierePermiso('descuentos', 'puede_ver'), descuentosController.reporte);
 router.get('/reporte/export', requierePermiso('descuentos', 'puede_ver'), descuentosController.exportarReporte);
+router.get('/reglas', requierePermiso('descuentos', 'puede_ver'), descuentosController.listarReglas);
+router.put('/reglas/:id', requierePermiso('descuentos', 'puede_editar'), descuentosController.actualizarRegla);
 router.put('/:id/avanzar', requierePermiso('descuentos', 'puede_editar'), descuentosController.avanzar);
 
 module.exports = router;

@@ -8,7 +8,8 @@ const router = express.Router();
 router.use(verificarAccessToken);
 
 // Reusa el permiso de "marcaciones": el resumen de hoy es una vista agregada de lo mismo.
-router.get('/resumen', requierePermiso('marcaciones', 'puede_ver'), dashboardController.resumen);
-router.get('/ranking', requierePermiso('marcaciones', 'puede_ver'), dashboardController.ranking);
+router.get('/resumen',    requierePermiso('marcaciones', 'puede_ver'), dashboardController.resumen);
+router.get('/ranking',    requierePermiso('marcaciones', 'puede_ver'), dashboardController.ranking);
+router.get('/asistencia', requierePermiso('marcaciones', 'puede_ver'), dashboardController.asistencia);
 
 module.exports = router;

@@ -2,6 +2,28 @@ const descuentosRepo = require('../repositories/descuentos.repository');
 const reglaDescuentoRepo = require('../repositories/reglaDescuento.repository');
 const auditoriaRepo = require('../repositories/auditoria.repository');
 
+async function listarReglas() {
+  return reglaDescuentoRepo.listar();
+}
+
+async function actualizarRegla(id, montoBs, usuarioId, ip) {
+  if (montoBs === undefined || montoBs === null || isNaN(Number(montoBs)) || Number(montoBs) < 0) {
+    throw new DescuentoError('monto_bs debe ser un número ≥ 0');
+  }
+  const regla = await reglaDescuentoRepo.actualizar(id, Number(montoBs));
+  if (!regla) throw new DescuentoError('Regla no encontrada', 404);
+
+  await auditoriaRepo.registrar({
+    usuarioId,
+    accion: 'regla_descuento_actualizada',
+    tabla: 'regla_descuento',
+    registroId: id,
+    ip,
+    detalle: { monto_bs: Number(montoBs) },
+  });
+  return regla;
+}
+
 class DescuentoError extends Error {
   constructor(message, status = 400) {
     super(message);
@@ -63,4 +85,4 @@ async function avanzarEstado(id, usuarioId, ip) {
   return descuentosRepo.obtenerPorId(id);
 }
 
-module.exports = { calcularParaEntrada, listar, reportePorPeriodo, avanzarEstado, DescuentoError };
+module.exports = { calcularParaEntrada, listar, reportePorPeriodo, avanzarEstado, listarReglas, actualizarRegla, DescuentoError };

@@ -109,4 +109,42 @@ async function ranking(periodo = 'hoy') {
   };
 }
 
-module.exports = { resumen, ranking };
+async function asistenciaSemanal({ fechaInicio, fechaFin, sucursalId, turnoId, empleadoId }) {
+  const filas = await marcacionesRepo.asistenciaSemanal({ fechaInicio, fechaFin, sucursalId, turnoId, empleadoId });
+
+  // Genera la lista de días calendario entre fechaInicio y fechaFin
+  const dias = [];
+  const cursor = new Date(fechaInicio + 'T12:00:00Z');
+  const fin = new Date(fechaFin + 'T12:00:00Z');
+  while (cursor <= fin) {
+    dias.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  // Normaliza filas: convierte tipos de pg (strings de NUMERIC, booleans, etc.)
+  const jornadas = filas.map(f => ({
+    empleadoId:          f.empleado_id,
+    empleadoNombre:      f.empleado_nombre,
+    empleadoApellido:    f.empleado_apellido,
+    empleadoDocumento:   f.empleado_documento_nro,
+    jornadaId:           f.jornada_id,
+    fecha:               f.fecha instanceof Date ? f.fecha.toISOString().slice(0, 10) : String(f.fecha),
+    turnoId:             f.turno_id,
+    turnoNombre:         f.turno_nombre,
+    sucursalId:          f.sucursal_id,
+    sucursalNombre:      f.sucursal_nombre,
+    requiereRevision:    Boolean(f.requiere_revision),
+    cierreAutomatico:    Boolean(f.cierre_automatico),
+    salidaMarcada:       Boolean(f.salida_marcada),
+    jornadaEstado:       f.jornada_estado,
+    horaEntrada:         f.hora_entrada ?? null,
+    minutosAtraso:       f.minutos_atraso != null ? Number(f.minutos_atraso) : null,
+    minutosAnticipacion: f.minutos_anticipacion != null ? Number(f.minutos_anticipacion) : null,
+    identidadVerificada: f.identidad_verificada != null ? Boolean(f.identidad_verificada) : null,
+    horaSalida:          f.hora_salida ?? null,
+  }));
+
+  return { fechaInicio, fechaFin, dias, jornadas };
+}
+
+module.exports = { resumen, ranking, asistenciaSemanal };
