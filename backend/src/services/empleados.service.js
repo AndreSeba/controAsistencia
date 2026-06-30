@@ -21,6 +21,24 @@ async function crear({ nombre, apellido, documentoNro, hrmsRef }) {
   return obtenerOFallar(id);
 }
 
+async function actualizar(id, { nombre, apellido, documentoNro, estado, hrmsRef }) {
+  if (!nombre?.trim()) throw new EmpleadoError('nombre es requerido');
+  if (!apellido?.trim()) throw new EmpleadoError('apellido es requerido');
+  if (!documentoNro?.trim()) throw new EmpleadoError('documentoNro (CI) es requerido');
+  
+  if (estado && estado !== 'activo' && estado !== 'inactivo') {
+    throw new EmpleadoError('estado inválido (debe ser activo o inactivo)');
+  }
+
+  const existente = await empleadosRepo.buscarPorDocumento(documentoNro.trim());
+  if (existente && existente.id !== id) {
+    throw new EmpleadoError(`Ya existe otro empleado con ese documento: ${existente.nombre} ${existente.apellido}`, 409);
+  }
+
+  await empleadosRepo.actualizar(id, { nombre, apellido, documentoNro: documentoNro.trim(), estado, hrmsRef });
+  return obtenerOFallar(id);
+}
+
 async function listar(incluirInactivos) {
   return empleadosRepo.listar(incluirInactivos);
 }
@@ -31,4 +49,4 @@ async function obtenerOFallar(id) {
   return empleado;
 }
 
-module.exports = { crear, listar, obtenerOFallar, EmpleadoError };
+module.exports = { crear, actualizar, listar, obtenerOFallar, EmpleadoError };

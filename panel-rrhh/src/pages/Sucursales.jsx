@@ -3,6 +3,8 @@ import { useAuth } from '../lib/AuthContext';
 import SelectorUbicacion from '../components/SelectorUbicacion';
 import Modal from '../components/Modal';
 import { urlPantalla } from '../lib/urlPantalla';
+import { usePaginacion } from '../hooks/usePaginacion';
+import Paginacion from '../components/Paginacion';
 
 const GEOCERCA_VACIA = { geoLat: null, geoLng: null, geoRadioM: 100 };
 
@@ -16,6 +18,8 @@ function Sucursales() {
   const [editandoId, setEditandoId] = useState(null);
   const [geocercaEdit, setGeocercaEdit] = useState(GEOCERCA_VACIA);
   const [idCopiado, setIdCopiado] = useState(null);
+
+  const { datosPaginados, paginaActiva, totalPaginas, irPaginaSiguiente, irPaginaAnterior } = usePaginacion(sucursales, 10);
 
   async function cargar() {
     try {
@@ -126,7 +130,7 @@ function Sucursales() {
           </tr>
         </thead>
         <tbody>
-          {sucursales.map((s) => (
+          {datosPaginados.map((s) => (
             <tr key={s.id}>
               <td>{s.nombre}</td>
               <td>{s.geo_radio_m} m</td>
@@ -145,6 +149,12 @@ function Sucursales() {
           ))}
         </tbody>
       </table>
+      <Paginacion 
+        paginaActiva={paginaActiva} 
+        totalPaginas={totalPaginas} 
+        irPaginaAnterior={irPaginaAnterior} 
+        irPaginaSiguiente={irPaginaSiguiente} 
+      />
 
       <Modal abierto={modalAbierto === 'crear'} titulo="Nueva sucursal" onCerrar={() => setModalAbierto(null)}>
         <form onSubmit={crear}>

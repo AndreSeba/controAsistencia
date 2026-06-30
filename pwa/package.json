@@ -11,10 +11,12 @@
   },
   "dependencies": {
     "jsqr": "^1.4.0",
+    "localforage": "^1.10.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "react-router-dom": "^7.18.0"
+    "react-router-dom": "^7.18.0",
+    "totp-generator": "^2.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

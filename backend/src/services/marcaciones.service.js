@@ -13,6 +13,7 @@ const descuentosService = require('./descuentos.service');
 const configuracionService = require('./configuracion.service');
 const horarioUtil = require('../utils/horario.util');
 const geocercaUtil = require('../utils/geocerca.util');
+const { TOTP } = require('totp-generator');
 
 const UMBRAL_REVISION_ATRASO_MIN = 60; // P9: > 60 min => requiere_revision (no automático en el monto)
 
@@ -35,23 +36,47 @@ async function registrar({
   gpsLng,
   gpsPrecisionM,
   tipoSolicitado,
+  offlineMode,
+  timestampOffline,
 }) {
   if (!selfieBuffer?.length) throw new MarcacionError('selfie es requerida');
 
   const sucursal = await sucursalesService.obtenerOFallar(sucursalId);
-  const timestampUtc = new Date();
+  const timestampUtc = offlineMode && timestampOffline ? new Date(timestampOffline) : new Date();
 
   const pool = getPool();
   const client = await pool.connect();
   await client.query('BEGIN');
 
   try {
-    const qr = await qrTokenRepo.buscarVigentePorToken(qrToken, client);
-    if (!qr || qr.sucursal_id !== sucursalId) {
-      throw new MarcacionError('Código QR inválido o expirado', 401);
+    let qrId = null;
+    let qrTokenGenerado = null;
+
+    if (offlineMode) {
+      if (!sucursal.totp_secret) {
+        throw new MarcacionError('La sucursal no soporta marcación offline (sin TOTP config)', 400);
+      }
+      try {
+        const { otp } = TOTP.generate(sucursal.totp_secret, { digits: 6, period: 30, timestamp: timestampUtc.getTime() });
+        if (otp !== qrToken) {
+          throw new MarcacionError('Código QR (TOTP) inválido o expirado', 401);
+        }
+        qrTokenGenerado = qrToken;
+      } catch (e) {
+        throw new MarcacionError('Error verificando TOTP offline', 401);
+      }
+    } else {
+      const qr = await qrTokenRepo.buscarVigentePorToken(qrToken, client);
+      if (!qr || qr.sucursal_id !== sucursalId) {
+        throw new MarcacionError('Código QR inválido o expirado', 401);
+      }
+      qrId = qr.id;
     }
 
-    const liveness = await livenessService.validarYConsumir(livenessNonce, empleadoId, client);
+    let liveness = { livenessOk: false, livenessRetoId: null };
+    if (!offlineMode) {
+      liveness = await livenessService.validarYConsumir(livenessNonce, empleadoId, client);
+    }
 
     const biometria = await biometriaRepo.buscarActivoPorEmpleado(empleadoId);
     let faceMatchScore = null;
@@ -122,7 +147,7 @@ async function registrar({
       geoCentroLatAplicado: sucursal.geo_lat,
       geoCentroLngAplicado: sucursal.geo_lng,
       geoRadioAplicado: sucursal.geo_radio_m,
-      qrTokenId: qr.id,
+      qrTokenId: qrId,
       selfieUrl,
       livenessOk: liveness.livenessOk,
       livenessRetoId: liveness.livenessRetoId,
@@ -131,6 +156,8 @@ async function registrar({
       minutosAtraso,
       minutosAnticipacion,
       estado,
+      offlineMode,
+      totpToken: qrTokenGenerado,
     }, client);
 
     if (tipo === 'ENTRADA') {

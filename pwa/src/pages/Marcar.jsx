@@ -3,6 +3,7 @@ import jsQR from 'jsqr';
 import { useCamara } from '../lib/useCamara';
 import { request, ApiError } from '../lib/api';
 import { obtenerUbicacion } from '../lib/geolocalizacion';
+import { guardarMarcacionOffline, sincronizarPendientes } from '../lib/offlineSync';
 
 const SEGUNDOS_PARA_CAPTURAR = 3;
 
@@ -113,6 +114,23 @@ function Marcar({ deviceToken }) {
     setPaso('escaneando');
   }
 
+  // Sincronizar en segundo plano al recuperar la conexión
+  useEffect(() => {
+    const handleOnline = async () => {
+      try {
+        await sincronizarPendientes(deviceToken);
+      } catch(e) {
+        // Ignorar errores de background sync
+      }
+    };
+    window.addEventListener('online', handleOnline);
+    // Intentamos sincronizar al inicio por si había algo pendiente
+    if (navigator.onLine) {
+      handleOnline();
+    }
+    return () => window.removeEventListener('online', handleOnline);
+  }, [deviceToken]);
+
   async function manejarQrDetectado(datos) {
     setQrDetectado(datos);
     setError(null);
@@ -121,8 +139,14 @@ function Marcar({ deviceToken }) {
       setReto(nuevoReto);
       setPaso('reto');
     } catch (err) {
-      setError(err.message);
-      setPaso('error');
+      if (!navigator.onLine || err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+        // Modo offline
+        setReto({ nonce: 'offline-' + Date.now() });
+        setPaso('reto');
+      } else {
+        setError(err.message);
+        setPaso('error');
+      }
     }
   }
 
@@ -134,18 +158,44 @@ function Marcar({ deviceToken }) {
     }
     setPaso('enviando');
     try {
-      const ubicacion = await obtenerUbicacion();
+      // Capturamos ubicación (podría fallar sin internet, pero el navegador la cachea a veces)
+      let ubicacion = { lat: null, lng: null, precisionM: null };
+      try {
+        ubicacion = await obtenerUbicacion();
+      } catch (e) {
+        // Seguimos sin ubicación si falla
+      }
+      
+      const payload = {
+        selfieBlob,
+        sucursalId: qrDetectado.sucursalId,
+        qrToken: qrDetectado.token,
+        livenessNonce: reto.nonce,
+        tipo: tipoElegido,
+        gpsLat: ubicacion.lat,
+        gpsLng: ubicacion.lng,
+        gpsPrecisionM: ubicacion.precisionM
+      };
+
+      if (!navigator.onLine || reto.nonce.startsWith('offline-')) {
+        await guardarMarcacionOffline(payload);
+        setResultado({ estado: 'registrada_offline', tipo: tipoElegido });
+        setPaso('resultado');
+        return;
+      }
+
       const formData = new FormData();
       formData.append('selfie', selfieBlob, 'selfie.jpg');
-      formData.append('sucursalId', qrDetectado.sucursalId);
-      formData.append('qrToken', qrDetectado.token);
-      formData.append('livenessNonce', reto.nonce);
-      formData.append('tipo', tipoElegido);
-      if (ubicacion.lat != null) {
-        formData.append('gpsLat', ubicacion.lat);
-        formData.append('gpsLng', ubicacion.lng);
-        formData.append('gpsPrecisionM', ubicacion.precisionM);
+      formData.append('sucursalId', payload.sucursalId);
+      formData.append('qrToken', payload.qrToken);
+      formData.append('livenessNonce', payload.livenessNonce);
+      formData.append('tipo', payload.tipo);
+      if (payload.gpsLat != null) {
+        formData.append('gpsLat', payload.gpsLat);
+        formData.append('gpsLng', payload.gpsLng);
+        formData.append('gpsPrecisionM', payload.gpsPrecisionM);
       }
+      
       const marcacion = await request('/marcaciones', {
         method: 'POST',
         deviceToken,
@@ -155,9 +205,27 @@ function Marcar({ deviceToken }) {
       setResultado(marcacion);
       setPaso('resultado');
     } catch (err) {
-      const mensaje = err instanceof ApiError ? err.message : 'No se pudo registrar la marcación. Probá de nuevo.';
-      setError(mensaje);
-      setPaso('error');
+      if (!navigator.onLine || err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+        // Guardar offline si falla la red al enviar
+        try {
+          await guardarMarcacionOffline({
+            selfieBlob,
+            sucursalId: qrDetectado.sucursalId,
+            qrToken: qrDetectado.token,
+            livenessNonce: reto.nonce,
+            tipo: tipoElegido
+          });
+          setResultado({ estado: 'registrada_offline', tipo: tipoElegido });
+          setPaso('resultado');
+        } catch(e) {
+          setError('Fallo guardando la marcación offline.');
+          setPaso('error');
+        }
+      } else {
+        const mensaje = err instanceof ApiError ? err.message : 'No se pudo registrar la marcación. Probá de nuevo.';
+        setError(mensaje);
+        setPaso('error');
+      }
     }
   }
 
@@ -191,13 +259,20 @@ function Marcar({ deviceToken }) {
   }
 
   if (paso === 'resultado') {
-    const exito = resultado.estado === 'registrada';
+    const offline = resultado.estado === 'registrada_offline';
+    const exito = resultado.estado === 'registrada' || offline;
     return (
       <div className="pantalla-centrada">
         <div className="tarjeta resultado">
           <p className="icono-resultado">{exito ? '✅' : '⚠️'}</p>
           <h1>{resultado.tipo === 'ENTRADA' ? 'Entrada registrada' : 'Salida registrada'}</h1>
           {!exito && <p className="ayuda">Quedó marcada para revisión, pero tu marca ya quedó guardada.</p>}
+          {offline && (
+             <div style={{ backgroundColor: '#ffcc00', color: '#000', padding: '10px', borderRadius: '5px', marginTop: '10px' }}>
+               <p><strong>Estás sin conexión</strong></p>
+               <p style={{fontSize:'0.9rem'}}>La marcación se guardó en tu dispositivo. Se enviará automáticamente cuando recuperes el internet.</p>
+             </div>
+          )}
           <button type="button" onClick={reintentar}>Volver a marcar</button>
         </div>
       </div>

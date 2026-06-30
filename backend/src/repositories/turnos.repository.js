@@ -71,8 +71,17 @@ async function listarAbiertasVencidas() {
   return result.rows;
 }
 
-async function resumenPorFecha(fecha) {
+async function resumenPorPeriodo(fechaInicio, fechaFin) {
   const pool = getPool();
+  
+  let filtroFecha = '';
+  const params = [];
+  
+  if (fechaInicio && fechaFin) {
+    filtroFecha = `AND j.fecha >= $1 AND j.fecha <= $2`;
+    params.push(fechaInicio, fechaFin);
+  }
+
   const result = await pool.query(
     `SELECT tc.id, tc.nombre,
             COUNT(j.id) AS entradas,
@@ -80,10 +89,10 @@ async function resumenPorFecha(fecha) {
             COUNT(j.id) FILTER (WHERE j.salida_marcada) AS salidas,
             COUNT(j.id) FILTER (WHERE j.requiere_revision) AS requieren_revision
      FROM turno_catalogo tc
-     LEFT JOIN turno_jornada j ON j.turno_catalogo_id = tc.id AND j.fecha = $1
+     LEFT JOIN turno_jornada j ON j.turno_catalogo_id = tc.id ${filtroFecha}
      GROUP BY tc.id, tc.nombre, tc.hora_inicio
      ORDER BY tc.hora_inicio`,
-    [fecha]
+    params
   );
   return result.rows;
 }
@@ -96,5 +105,5 @@ module.exports = {
   crear,
   cerrar,
   listarAbiertasVencidas,
-  resumenPorFecha,
+  resumenPorPeriodo,
 };

@@ -10,6 +10,15 @@ async function crear({ nombre, apellido, documentoNro, hrmsRef }, executor = get
   return result.rows[0].id;
 }
 
+async function actualizar(id, { nombre, apellido, documentoNro, estado, hrmsRef }, executor = getPool()) {
+  await executor.query(
+    `UPDATE empleado 
+     SET nombre = $1, apellido = $2, documento_nro = $3, estado = COALESCE($4, estado), hrms_ref = $5
+     WHERE id = $6`,
+    [nombre, apellido, documentoNro, estado, hrmsRef || null, id]
+  );
+}
+
 async function buscarPorDocumento(documentoNro, executor = getPool()) {
   const result = await executor.query(
     'SELECT id, nombre, apellido FROM empleado WHERE documento_nro = $1',
@@ -43,4 +52,4 @@ async function obtenerPorId(id, executor = getPool()) {
   return result.rows[0] || null;
 }
 
-module.exports = { crear, buscarPorDocumento, listar, obtenerPorId };
+module.exports = { crear, actualizar, buscarPorDocumento, listar, obtenerPorId };

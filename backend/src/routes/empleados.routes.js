@@ -11,6 +11,7 @@ router.use(verificarAccessToken);
 router.get('/', requierePermiso('empleados', 'puede_ver'), empleadosController.listar);
 router.get('/:id', requierePermiso('empleados', 'puede_ver'), empleadosController.obtener);
 router.post('/', requierePermiso('empleados', 'puede_editar'), empleadosController.crear);
+router.put('/:id', requierePermiso('empleados', 'puede_editar'), empleadosController.actualizar);
 
 router.post(
   '/:id/dispositivo',

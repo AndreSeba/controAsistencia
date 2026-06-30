@@ -28,6 +28,17 @@ async function crear(req, res, next) {
   }
 }
 
+async function actualizar(req, res, next) {
+  try {
+    const { nombre, apellido, documentoNro, estado, hrmsRef } = req.body;
+    res.json(await empleadosService.actualizar(Number(req.params.id), {
+      nombre, apellido, documentoNro, estado, hrmsRef
+    }));
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function enrolarDispositivo(req, res, next) {
   try {
     const resultado = await dispositivosService.enrolar(Number(req.params.id), req.usuario.id, req.ip);
@@ -79,6 +90,7 @@ module.exports = {
   listar,
   obtener,
   crear,
+  actualizar,
   enrolarDispositivo,
   obtenerEnlaceDispositivo,
   revocarDispositivo,

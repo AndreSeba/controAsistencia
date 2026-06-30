@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import { descargarBlob } from '../lib/api';
+import { usePaginacion } from '../hooks/usePaginacion';
+import Paginacion from '../components/Paginacion';
 
 function periodoActual() {
   const hoy = new Date();
@@ -19,6 +21,24 @@ function Descuentos() {
   const [descuentos, setDescuentos] = useState([]);
   const [reporte, setReporte] = useState([]);
   const [error, setError] = useState(null);
+  const [busqueda, setBusqueda] = useState('');
+
+  const reporteFiltrado = reporte.filter(r => {
+    if (!busqueda) return true;
+    const term = busqueda.toLowerCase();
+    const full = `${r.empleado_nombre} ${r.empleado_apellido}`.toLowerCase();
+    return full.includes(term) || r.empleado_documento_nro?.toLowerCase().includes(term);
+  });
+  
+  const descuentosFiltrados = descuentos.filter(d => {
+    if (!busqueda) return true;
+    const term = busqueda.toLowerCase();
+    const full = `${d.empleado_nombre} ${d.empleado_apellido}`.toLowerCase();
+    return full.includes(term) || d.empleado_documento_nro?.toLowerCase().includes(term);
+  });
+
+  const { datosPaginados: repPaginados, paginaActiva: repPag, totalPaginas: repTotal, irPaginaSiguiente: repSig, irPaginaAnterior: repAnt, setPagina: setRepPag } = usePaginacion(reporteFiltrado, 10);
+  const { datosPaginados: descPaginados, paginaActiva: descPag, totalPaginas: descTotal, irPaginaSiguiente: descSig, irPaginaAnterior: descAnt, setPagina: setDescPag } = usePaginacion(descuentosFiltrados, 10);
 
   async function cargar() {
     try {
@@ -36,7 +56,11 @@ function Descuentos() {
   }
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- recarga al cambiar filtros, no sincronización de UI
-  useEffect(() => { cargar(); }, [periodo, filtroEstado]);
+  useEffect(() => { 
+    cargar(); 
+    setRepPag(1);
+    setDescPag(1);
+  }, [periodo, filtroEstado]);
 
   async function avanzar(id) {
     setError(null);
@@ -48,7 +72,7 @@ function Descuentos() {
     }
   }
 
-  const totalPeriodo = reporte.reduce((acc, r) => acc + Number(r.total_bs), 0);
+  const totalPeriodo = reporteFiltrado.reduce((acc, r) => acc + Number(r.total_bs), 0);
 
   async function descargarExcel() {
     setError(null);
@@ -66,7 +90,18 @@ function Descuentos() {
       <p className="subtitulo">Los montos se calculan solos según los minutos de atraso. Nada se aplica hasta que lo apruebes acá.</p>
       {error && <p className="error">{error}</p>}
 
-      <div className="filtros filtros-fila">
+      <div className="filtros filtros-fila filtros-wrap">
+        <input
+          type="search"
+          className="buscador"
+          placeholder="Buscar por nombre o CI..."
+          value={busqueda}
+          onChange={(e) => {
+            setBusqueda(e.target.value);
+            setRepPag(1);
+            setDescPag(1);
+          }}
+        />
         <label>
           Período
           <input type="month" value={periodo} onChange={(e) => setPeriodo(e.target.value)} />
@@ -90,12 +125,13 @@ function Descuentos() {
         ) : (
           <table className="tabla">
             <thead>
-              <tr><th>Empleado</th><th>Cantidad</th><th>Total Bs</th><th>Aplicado Bs</th></tr>
+              <tr><th>Personal</th><th>Documento</th><th>Cantidad</th><th>Total Bs</th><th>Aplicado Bs</th></tr>
             </thead>
             <tbody>
-              {reporte.map((r) => (
+              {repPaginados.map((r) => (
                 <tr key={r.empleado_id}>
-                  <td>{r.empleado_nombre}</td>
+                  <td>{r.empleado_nombre} {r.empleado_apellido}</td>
+                  <td>{r.empleado_documento_nro}</td>
                   <td>{r.cantidad_descuentos}</td>
                   <td>{r.total_bs}</td>
                   <td>{r.total_aplicado_bs}</td>
@@ -104,25 +140,33 @@ function Descuentos() {
               <tr>
                 <td><strong>Total</strong></td>
                 <td></td>
+                <td></td>
                 <td><strong>{totalPeriodo}</strong></td>
                 <td></td>
               </tr>
             </tbody>
           </table>
         )}
+        <Paginacion 
+          paginaActiva={repPag} 
+          totalPaginas={repTotal} 
+          irPaginaAnterior={repAnt} 
+          irPaginaSiguiente={repSig} 
+        />
       </div>
 
       <table className="tabla">
         <thead>
           <tr>
-            <th>Empleado</th><th>Sucursal</th><th>Entrada</th><th>Atraso (min)</th>
+            <th>Personal</th><th>Documento</th><th>Sucursal</th><th>Entrada</th><th>Atraso (min)</th>
             <th>Monto Bs</th><th>Estado</th><th></th>
           </tr>
         </thead>
         <tbody>
-          {descuentos.map((d) => (
+          {descPaginados.map((d) => (
             <tr key={d.id} className={d.minutos_atraso > 60 ? 'fila-alerta' : ''}>
-              <td>{d.empleado_nombre}</td>
+              <td>{d.empleado_nombre} {d.empleado_apellido}</td>
+              <td>{d.empleado_documento_nro}</td>
               <td>{d.sucursal_nombre}</td>
               <td>{new Date(d.timestamp_utc).toLocaleString()}</td>
               <td>{d.minutos_atraso}</td>
@@ -137,6 +181,12 @@ function Descuentos() {
           ))}
         </tbody>
       </table>
+      <Paginacion 
+        paginaActiva={descPag} 
+        totalPaginas={descTotal} 
+        irPaginaAnterior={descAnt} 
+        irPaginaSiguiente={descSig} 
+      />
     </div>
   );
 }

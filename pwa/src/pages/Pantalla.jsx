@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import QRCode from 'qrcode';
 import { request } from '../lib/api';
-
-const REFRESCO_MS = 5000;
+import { TOTP } from 'totp-generator';
 
 function Pantalla() {
   const { sucursalId } = useParams();
@@ -15,29 +14,65 @@ function Pantalla() {
     let activo = true;
     let intervaloCuenta;
 
-    async function actualizar() {
+    async function inicializar() {
       try {
-        const { token, validoHasta } = await request(`/sucursales/${sucursalId}/qr`);
-        if (!activo) return;
-        setError(null);
-        const payload = JSON.stringify({ sucursalId: Number(sucursalId), token });
-        await QRCode.toCanvas(canvasRef.current, payload, { width: 320, margin: 1 });
-
-        clearInterval(intervaloCuenta);
-        intervaloCuenta = setInterval(() => {
-          const restante = Math.max(0, Math.round((new Date(validoHasta) - Date.now()) / 1000));
-          setSegundosRestantes(restante);
-        }, 1000);
-      } catch {
-        if (activo) setError('No se pudo cargar el código. Reintentando…');
+        // Intentamos obtener la llave secreta del servidor (si hay internet)
+        const res = await request(`/sucursales/${sucursalId}/qr`);
+        if (res && res.totpSecret) {
+          localStorage.setItem(`totp_secret_${sucursalId}`, res.totpSecret);
+          const offset = res.serverTime ? res.serverTime - Date.now() : 0;
+          localStorage.setItem(`time_offset`, offset.toString());
+        }
+      } catch (err) {
+        console.warn('Iniciando en modo offline. Usando llave cacheada.');
       }
+
+      if (!activo) return;
+      
+      const secret = localStorage.getItem(`totp_secret_${sucursalId}`);
+      if (!secret) {
+        setError('No hay conexión a internet y no se encontró llave guardada.');
+        return;
+      }
+      
+      setError(null);
+      
+      // Función para renderizar el QR actual
+      const renderizarQR = async () => {
+        const offset = Number(localStorage.getItem(`time_offset`)) || 0;
+        const now = Date.now() + offset;
+        
+        // Generar TOTP. El secret que tenemos es un HEX de 40 caracteres.
+        // totp-generator por defecto espera base32, pero podemos pasarle raw string
+        // o mejor usar una configuración si está disponible. 
+        // Asumiendo que totp-generator genera a partir del string proporcionado.
+        let token = "ERROR";
+        try {
+          // La libreria totp-generator actual devuelve un objeto { otp, expires }
+          const { otp, expires } = TOTP.generate(secret, { digits: 6, period: 30, timestamp: now });
+          token = otp;
+          
+          const payload = JSON.stringify({ sucursalId: Number(sucursalId), token });
+          await QRCode.toCanvas(canvasRef.current, payload, { width: 320, margin: 1 });
+          
+          const restante = Math.max(0, Math.round((expires - now) / 1000));
+          setSegundosRestantes(restante);
+        } catch(e) {
+          console.error('Error generando TOTP:', e);
+          if (activo) setError('Error interno generando QR. Revise la llave secreta.');
+        }
+      };
+
+      await renderizarQR();
+      
+      intervaloCuenta = setInterval(() => {
+        renderizarQR();
+      }, 1000);
     }
 
-    actualizar();
-    const intervaloRefresco = setInterval(actualizar, REFRESCO_MS);
+    inicializar();
     return () => {
       activo = false;
-      clearInterval(intervaloRefresco);
       clearInterval(intervaloCuenta);
     };
   }, [sucursalId]);

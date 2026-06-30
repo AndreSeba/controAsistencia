@@ -19,7 +19,7 @@ async function listar({ periodo, estado, empleadoId } = {}) {
   if (empleadoId) { params.push(empleadoId); condiciones.push(`d.empleado_id = $${params.length}`); }
   const where = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '';
   const result = await pool.query(
-    `SELECT d.id, d.marcacion_id, d.empleado_id, e.nombre AS empleado_nombre,
+    `SELECT d.id, d.marcacion_id, d.empleado_id, e.nombre AS empleado_nombre, e.apellido AS empleado_apellido, e.documento_nro AS empleado_documento_nro,
             d.monto_bs, d.regla_id, d.periodo, d.estado, d.aprobado_por,
             m.timestamp_utc, m.minutos_atraso, m.sucursal_id, s.nombre AS sucursal_nombre
      FROM descuento d
@@ -53,18 +53,40 @@ async function actualizarEstado(id, estado, aprobadoPor, executor = getPool()) {
 async function reportePorPeriodo(periodo) {
   const pool = getPool();
   const result = await pool.query(
-    `SELECT d.empleado_id, e.nombre AS empleado_nombre,
+    `SELECT d.empleado_id, e.nombre AS empleado_nombre, e.apellido AS empleado_apellido, e.documento_nro AS empleado_documento_nro,
             COUNT(*) AS cantidad_descuentos,
             SUM(d.monto_bs) AS total_bs,
             SUM(CASE WHEN d.estado = 'aplicado' THEN d.monto_bs ELSE 0 END) AS total_aplicado_bs
      FROM descuento d
      JOIN empleado e ON e.id = d.empleado_id
      WHERE d.periodo = $1
-     GROUP BY d.empleado_id, e.nombre
+     GROUP BY d.empleado_id, e.nombre, e.apellido, e.documento_nro
      ORDER BY e.nombre`,
     [periodo]
   );
   return result.rows;
 }
 
-module.exports = { crear, listar, obtenerPorId, actualizarEstado, reportePorPeriodo };
+async function resumenPorSucursal(tsInicio, tsFin) {
+  const pool = getPool();
+  let where = "WHERE d.estado = 'aplicado'";
+  const params = [];
+  if (tsInicio && tsFin) {
+    params.push(tsInicio, tsFin);
+    where += ` AND m.timestamp_utc >= $1 AND m.timestamp_utc <= $2`;
+  }
+  const result = await pool.query(
+    `SELECT s.id AS sucursal_id, s.nombre AS sucursal_nombre,
+            SUM(d.monto_bs) AS total_bs
+     FROM descuento d
+     JOIN marcacion m ON d.marcacion_id = m.id
+     JOIN sucursal s ON m.sucursal_id = s.id
+     ${where}
+     GROUP BY s.id, s.nombre
+     ORDER BY total_bs DESC`,
+    params
+  );
+  return result.rows;
+}
+
+module.exports = { crear, listar, obtenerPorId, actualizarEstado, reportePorPeriodo, resumenPorSucursal };

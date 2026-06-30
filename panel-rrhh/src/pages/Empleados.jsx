@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import Modal from '../components/Modal';
 import { urlActivacion } from '../lib/urlPantalla';
+import { usePaginacion } from '../hooks/usePaginacion';
+import Paginacion from '../components/Paginacion';
 
 function Empleados() {
   const { request } = useAuth();
@@ -11,10 +13,29 @@ function Empleados() {
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [nuevoApellido, setNuevoApellido] = useState('');
   const [nuevoDocumentoNro, setNuevoDocumentoNro] = useState('');
+  const [nuevoEstado, setNuevoEstado] = useState('activo');
   const [tokenEmitido, setTokenEmitido] = useState(null);
   const [idCopiado, setIdCopiado] = useState(null);
   const fotoInputRef = useRef(null);
   const [empleadoBiometriaId, setEmpleadoBiometriaId] = useState(null);
+  const [busqueda, setBusqueda] = useState('');
+  const [empleadoEditando, setEmpleadoEditando] = useState(null);
+
+  const empleadosFiltrados = empleados.filter(emp => {
+    if (!busqueda) return true;
+    const term = busqueda.toLowerCase();
+    const full = `${emp.nombre} ${emp.apellido}`.toLowerCase();
+    return full.includes(term) || emp.documento_nro?.toLowerCase().includes(term);
+  });
+
+  const { datosPaginados, paginaActiva, totalPaginas, irPaginaSiguiente, irPaginaAnterior, setPagina } = usePaginacion(empleadosFiltrados, 10);
+
+  // Volver a página 1 si cambia la lista filtrada y quedamos "fuera"
+  useEffect(() => {
+    if (paginaActiva > totalPaginas && totalPaginas > 0) {
+      setPagina(totalPaginas);
+    }
+  }, [totalPaginas, paginaActiva, setPagina]);
 
   async function cargar() {
     try {
@@ -28,20 +49,38 @@ function Empleados() {
   useEffect(() => { cargar(); }, []);
 
   function abrirCrear() {
+    setEmpleadoEditando(null);
     setNuevoNombre('');
     setNuevoApellido('');
     setNuevoDocumentoNro('');
+    setNuevoEstado('activo');
     setModalAbierto(true);
   }
 
-  async function crear(e) {
+  function abrirEditar(emp) {
+    setEmpleadoEditando(emp);
+    setNuevoNombre(emp.nombre);
+    setNuevoApellido(emp.apellido);
+    setNuevoDocumentoNro(emp.documento_nro);
+    setNuevoEstado(emp.estado || 'activo');
+    setModalAbierto(true);
+  }
+
+  async function guardar(e) {
     e.preventDefault();
     setError(null);
     try {
-      await request('/empleados', {
-        method: 'POST',
-        body: { nombre: nuevoNombre, apellido: nuevoApellido, documentoNro: nuevoDocumentoNro },
-      });
+      if (empleadoEditando) {
+        await request(`/empleados/${empleadoEditando.id}`, {
+          method: 'PUT',
+          body: { nombre: nuevoNombre, apellido: nuevoApellido, documentoNro: nuevoDocumentoNro, estado: nuevoEstado },
+        });
+      } else {
+        await request('/empleados', {
+          method: 'POST',
+          body: { nombre: nuevoNombre, apellido: nuevoApellido, documentoNro: nuevoDocumentoNro, estado: nuevoEstado },
+        });
+      }
       setModalAbierto(false);
       cargar();
     } catch (err) {
@@ -115,12 +154,24 @@ function Empleados() {
       {error && <p className="error">{error}</p>}
       {tokenEmitido && (
         <p className="aviso">
-          Device token para el empleado #{tokenEmitido.empleadoId} (transmitir por canal seguro, no se
+          Device token para el personal #{tokenEmitido.empleadoId} (transmitir por canal seguro, no se
           volverá a mostrar): <code>{tokenEmitido.token}</code>
         </p>
       )}
 
-      <button type="button" className="boton-nuevo" onClick={abrirCrear}>+ Agregar personal</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', gap: '16px' }}>
+        <input
+          type="search"
+          placeholder="Buscar por nombre o CI..."
+          value={busqueda}
+          onChange={(e) => {
+            setBusqueda(e.target.value);
+            setPagina(1);
+          }}
+          style={{ padding: '8px', width: '300px', borderRadius: '4px', border: '1px solid #ccc' }}
+        />
+        <button type="button" className="boton-nuevo" onClick={abrirCrear}>+ Agregar personal</button>
+      </div>
 
       <input
         ref={fotoInputRef}
@@ -133,16 +184,19 @@ function Empleados() {
       <table className="tabla">
         <thead>
           <tr>
-            <th>Nombre</th><th>Apellido</th><th>Documento</th><th>Estado</th><th>Dispositivo</th><th>Biometría</th><th></th>
+            <th>Nombre</th><th>Apellido</th><th>Documento</th><th>Estado</th><th>Acciones</th><th>Dispositivo</th><th>Biometría</th>
           </tr>
         </thead>
         <tbody>
-          {empleados.map((emp) => (
+          {datosPaginados.map((emp) => (
             <tr key={emp.id}>
               <td>{emp.nombre}</td>
               <td>{emp.apellido}</td>
               <td>{emp.documento_nro}</td>
               <td>{emp.estado}</td>
+              <td>
+                <button type="button" onClick={() => abrirEditar(emp)}>Editar</button>
+              </td>
               <td>{emp.dispositivo_id ? 'Activo' : 'Sin enrolar'}</td>
               <td>{emp.biometria_id ? 'Activa' : 'Sin enrolar'}</td>
               <td>
@@ -163,9 +217,15 @@ function Empleados() {
           ))}
         </tbody>
       </table>
+      <Paginacion 
+        paginaActiva={paginaActiva} 
+        totalPaginas={totalPaginas} 
+        irPaginaAnterior={irPaginaAnterior} 
+        irPaginaSiguiente={irPaginaSiguiente} 
+      />
 
-      <Modal abierto={modalAbierto} titulo="Agregar personal" onCerrar={() => setModalAbierto(false)}>
-        <form onSubmit={crear}>
+      <Modal abierto={modalAbierto} titulo={empleadoEditando ? 'Editar personal' : 'Agregar personal'} onCerrar={() => setModalAbierto(false)}>
+        <form onSubmit={guardar}>
           <label className="campo">
             Nombre
             <input placeholder="Nombre" value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)} required />
@@ -178,7 +238,16 @@ function Empleados() {
             Documento (CI)
             <input placeholder="Documento (CI)" value={nuevoDocumentoNro} onChange={(e) => setNuevoDocumentoNro(e.target.value)} required />
           </label>
-          <button type="submit">Crear</button>
+          {empleadoEditando && (
+            <label className="campo">
+              Estado
+              <select value={nuevoEstado} onChange={(e) => setNuevoEstado(e.target.value)}>
+                <option value="activo">Activo</option>
+                <option value="inactivo">Inactivo</option>
+              </select>
+            </label>
+          )}
+          <button type="submit">{empleadoEditando ? 'Guardar Cambios' : 'Crear'}</button>
           <button type="button" onClick={() => setModalAbierto(false)}>Cancelar</button>
         </form>
       </Modal>

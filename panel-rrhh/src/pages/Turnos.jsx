@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import Modal from '../components/Modal';
+import { usePaginacion } from '../hooks/usePaginacion';
+import Paginacion from '../components/Paginacion';
 
 function Turnos() {
   const { request } = useAuth();
@@ -10,6 +12,8 @@ function Turnos() {
   const [form, setForm] = useState({ horaInicio: '', horaFin: '' });
   const [margen, setMargen] = useState('');
   const [margenGuardado, setMargenGuardado] = useState(false);
+
+  const { datosPaginados, paginaActiva, totalPaginas, irPaginaSiguiente, irPaginaAnterior } = usePaginacion(turnos, 10);
 
   async function cargar() {
     try {
@@ -60,7 +64,7 @@ function Turnos() {
     <div className="page">
       <h1>Turnos</h1>
       <p className="subtitulo">
-        Estos horarios aplican a todos los empleados por igual: cada marcación de entrada se
+        Estos horarios aplican a todo el personal por igual: cada marcación de entrada se
         asigna sola al turno más cercano, no hay horario individual por persona.
       </p>
       {error && <p className="error">{error}</p>}
@@ -70,7 +74,7 @@ function Turnos() {
           <tr><th>Turno</th><th>Entrada</th><th>Salida</th><th></th></tr>
         </thead>
         <tbody>
-          {turnos.map((t) => (
+          {datosPaginados.map((t) => (
             <tr key={t.id}>
               <td>{t.nombre}</td>
               <td>{t.hora_inicio}</td>
@@ -80,6 +84,12 @@ function Turnos() {
           ))}
         </tbody>
       </table>
+      <Paginacion 
+        paginaActiva={paginaActiva} 
+        totalPaginas={totalPaginas} 
+        irPaginaAnterior={irPaginaAnterior} 
+        irPaginaSiguiente={irPaginaSiguiente} 
+      />
 
       <Modal
         abierto={editandoId != null}

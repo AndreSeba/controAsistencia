@@ -16,7 +16,7 @@ async function registrar(req, res, next) {
     if (!req.file) {
       return res.status(400).json({ error: 'selfie (campo "selfie") es requerida' });
     }
-    const { sucursalId, qrToken, livenessNonce, gpsLat, gpsLng, gpsPrecisionM, tipo } = req.body;
+    const { sucursalId, qrToken, livenessNonce, gpsLat, gpsLng, gpsPrecisionM, tipo, offlineMode, timestampOffline } = req.body;
     if (!sucursalId || !qrToken || !livenessNonce) {
       return res.status(400).json({ error: 'sucursalId, qrToken y livenessNonce son requeridos' });
     }
@@ -36,6 +36,8 @@ async function registrar(req, res, next) {
       gpsLng: gpsLng != null ? Number(gpsLng) : null,
       gpsPrecisionM: gpsPrecisionM != null ? Number(gpsPrecisionM) : null,
       tipoSolicitado: tipo || undefined,
+      offlineMode: offlineMode === 'true' || offlineMode === true,
+      timestampOffline: timestampOffline ? Number(timestampOffline) : undefined,
     });
 
     res.status(201).json(marcacion);

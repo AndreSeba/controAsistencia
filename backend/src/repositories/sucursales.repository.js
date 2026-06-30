@@ -16,7 +16,7 @@ async function listar(incluirInactivas) {
 async function obtenerPorId(id, executor = getPool()) {
   const result = await executor.query(
     `SELECT id, nombre, geo_lat, geo_lng, geo_radio_m, wifi_bssid,
-            geo_actualizado_por, geo_actualizado_en, activo
+            geo_actualizado_por, geo_actualizado_en, activo, totp_secret
      FROM sucursal
      WHERE id = $1`,
     [id]
