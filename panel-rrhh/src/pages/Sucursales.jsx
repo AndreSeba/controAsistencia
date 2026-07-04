@@ -105,10 +105,10 @@ function Sucursales() {
     }
   }
 
-  async function copiarEnlace(sucursalId) {
+  async function copiarEnlace(sucursal) {
     try {
-      await navigator.clipboard.writeText(urlPantalla(sucursalId));
-      setIdCopiado(sucursalId);
+      await navigator.clipboard.writeText(urlPantalla(sucursal.id, sucursal.pantalla_token));
+      setIdCopiado(sucursal.id);
       setTimeout(() => setIdCopiado(null), 2000);
     } catch {
       setError('No se pudo copiar el enlace');
@@ -137,7 +137,7 @@ function Sucursales() {
               <td>{s.activo ? 'Activa' : 'Inactiva'}</td>
               <td>
                 <span className="enlace-copiable">
-                  <button type="button" onClick={() => copiarEnlace(s.id)}>Copiar enlace</button>
+                  <button type="button" onClick={() => copiarEnlace(s)}>Copiar enlace</button>
                   {idCopiado === s.id && <span className="enlace-copiado">Copiado ✓</span>}
                 </span>
               </td>

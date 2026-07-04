@@ -38,6 +38,11 @@ async function inicializar() {
 
 async function tensorDeBuffer(buffer, tf, image) {
   const canvas = await image.imageFromBuffer(buffer);
+  // Imágenes degeneradas (p.ej. 1x1) producen tensores con forma inválida que hacen
+  // lanzar a face-api fuera del ciclo de promesas — sin este guard, matan el proceso.
+  if (canvas.width < 32 || canvas.height < 32) {
+    throw new Error(`Imagen demasiado chica para detección facial (${canvas.width}x${canvas.height})`);
+  }
   const imageData = image.getImageData(canvas);
   return tf.tidy(() => {
     const data = tf.tensor(Array.from(imageData.data), [canvas.height, canvas.width, 4], 'int32');
@@ -61,6 +66,12 @@ async function descriptorDeBuffer(imagenBuffer) {
     const opciones = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 });
     const resultado = await faceapi.detectSingleFace(tensor, opciones).withFaceLandmarks().withFaceDescriptor();
     return resultado ? resultado.descriptor : null;
+  } catch {
+    // face-api lanza (no rechaza) con imágenes degeneradas (dimensiones mínimas,
+    // tensor con forma inesperada). Sin este catch la excepción escapa del pipeline
+    // async y MATA el proceso entero — cualquier selfie rara sería un DoS accidental.
+    // Se trata igual que "no se detectó cara": señal blanda, decide el caller.
+    return null;
   } finally {
     tf.dispose(tensor);
   }

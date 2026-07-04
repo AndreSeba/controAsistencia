@@ -4,8 +4,10 @@ function basePwa() {
   return import.meta.env.VITE_PWA_URL || `https://${window.location.hostname}:5175`;
 }
 
-function urlPantalla(sucursalId) {
-  return `${basePwa()}/pantalla/${sucursalId}`;
+// El token de pantalla (?k=) es la credencial del kiosko: sin él, el backend no
+// entrega el secreto TOTP. Siempre copiar el enlace completo desde el panel.
+function urlPantalla(sucursalId, pantallaToken) {
+  return `${basePwa()}/pantalla/${sucursalId}?k=${encodeURIComponent(pantallaToken ?? '')}`;
 }
 
 // Enlace de activación del empleado: lleva el device_token en la URL, así la PWA lo

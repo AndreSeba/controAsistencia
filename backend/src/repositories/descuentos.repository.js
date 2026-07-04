@@ -1,20 +1,24 @@
 const { getPool } = require('../config/db');
 
+// El descuento nace 'aplicado': se descuenta automáticamente al llegar tarde,
+// sin pasar por el flujo manual calculado → aprobado → aplicado (decisión 2026-07-03).
 async function crear({ marcacionId, empleadoId, montoBs, reglaId, periodo }, executor = getPool()) {
   const result = await executor.query(
-    `INSERT INTO descuento (marcacion_id, empleado_id, monto_bs, regla_id, periodo)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO descuento (marcacion_id, empleado_id, monto_bs, regla_id, periodo, estado)
+     VALUES ($1, $2, $3, $4, $5, 'aplicado')
      RETURNING id`,
     [marcacionId, empleadoId, montoBs, reglaId, periodo]
   );
   return result.rows[0].id;
 }
 
-async function listar({ periodo, estado, empleadoId } = {}) {
+async function listar({ periodo, fecha, estado, empleadoId } = {}) {
   const pool = getPool();
   const condiciones = [];
   const params = [];
   if (periodo) { params.push(periodo); condiciones.push(`d.periodo = $${params.length}`); }
+  // Día calendario local (Bolivia, UTC-4) de la marcación que originó el descuento.
+  if (fecha) { params.push(fecha); condiciones.push(`(m.timestamp_utc - INTERVAL '4 hours')::date = $${params.length}`); }
   if (estado) { params.push(estado); condiciones.push(`d.estado = $${params.length}`); }
   if (empleadoId) { params.push(empleadoId); condiciones.push(`d.empleado_id = $${params.length}`); }
   const where = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '';
@@ -50,8 +54,12 @@ async function actualizarEstado(id, estado, aprobadoPor, executor = getPool()) {
   );
 }
 
-async function reportePorPeriodo(periodo) {
+async function reportePorPeriodo({ periodo, fecha } = {}) {
   const pool = getPool();
+  const condiciones = [];
+  const params = [];
+  if (periodo) { params.push(periodo); condiciones.push(`d.periodo = $${params.length}`); }
+  if (fecha) { params.push(fecha); condiciones.push(`(m.timestamp_utc - INTERVAL '4 hours')::date = $${params.length}`); }
   const result = await pool.query(
     `SELECT d.empleado_id, e.nombre AS empleado_nombre, e.apellido AS empleado_apellido, e.documento_nro AS empleado_documento_nro,
             COUNT(*) AS cantidad_descuentos,
@@ -59,10 +67,11 @@ async function reportePorPeriodo(periodo) {
             SUM(CASE WHEN d.estado = 'aplicado' THEN d.monto_bs ELSE 0 END) AS total_aplicado_bs
      FROM descuento d
      JOIN empleado e ON e.id = d.empleado_id
-     WHERE d.periodo = $1
+     JOIN marcacion m ON m.id = d.marcacion_id
+     WHERE ${condiciones.join(' AND ')}
      GROUP BY d.empleado_id, e.nombre, e.apellido, e.documento_nro
      ORDER BY e.nombre`,
-    [periodo]
+    params
   );
   return result.rows;
 }

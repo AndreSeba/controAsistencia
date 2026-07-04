@@ -69,7 +69,7 @@ function SelectorUbicacion({ lat, lng, radioM, onCambiar }) {
           />
         )}
         {posicion && radioM > 0 && (
-          <Circle center={posicion} radius={Number(radioM)} pathOptions={{ color: '#6d28d9' }} />
+          <Circle center={posicion} radius={Number(radioM)} pathOptions={{ color: '#2563eb' }} />
         )}
       </MapContainer>
       <p className="ayuda-mapa">

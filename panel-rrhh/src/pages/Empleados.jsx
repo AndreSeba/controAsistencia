@@ -20,6 +20,10 @@ function Empleados() {
   const [empleadoBiometriaId, setEmpleadoBiometriaId] = useState(null);
   const [busqueda, setBusqueda] = useState('');
   const [empleadoEditando, setEmpleadoEditando] = useState(null);
+  const [nuevaFoto, setNuevaFoto] = useState(null);
+  const [fotoPreviewUrl, setFotoPreviewUrl] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+  const [errorModal, setErrorModal] = useState(null); // errores del formulario, visibles DENTRO del modal
 
   const empleadosFiltrados = empleados.filter(emp => {
     if (!busqueda) return true;
@@ -48,12 +52,22 @@ function Empleados() {
   // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial de datos, no sincronización de UI
   useEffect(() => { cargar(); }, []);
 
+  function limpiarFotoNueva() {
+    setNuevaFoto(null);
+    setFotoPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  }
+
   function abrirCrear() {
     setEmpleadoEditando(null);
     setNuevoNombre('');
     setNuevoApellido('');
     setNuevoDocumentoNro('');
     setNuevoEstado('activo');
+    limpiarFotoNueva();
+    setErrorModal(null);
     setModalAbierto(true);
   }
 
@@ -63,12 +77,26 @@ function Empleados() {
     setNuevoApellido(emp.apellido);
     setNuevoDocumentoNro(emp.documento_nro);
     setNuevoEstado(emp.estado || 'activo');
+    limpiarFotoNueva();
+    setErrorModal(null);
     setModalAbierto(true);
+  }
+
+  function manejarNuevaFoto(e) {
+    const archivo = e.target.files?.[0];
+    if (!archivo) return;
+    setNuevaFoto(archivo);
+    setFotoPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(archivo);
+    });
   }
 
   async function guardar(e) {
     e.preventDefault();
     setError(null);
+    setErrorModal(null);
+    setGuardando(true);
     try {
       if (empleadoEditando) {
         await request(`/empleados/${empleadoEditando.id}`, {
@@ -76,15 +104,39 @@ function Empleados() {
           body: { nombre: nuevoNombre, apellido: nuevoApellido, documentoNro: nuevoDocumentoNro, estado: nuevoEstado },
         });
       } else {
-        await request('/empleados', {
+        const creado = await request('/empleados', {
           method: 'POST',
           body: { nombre: nuevoNombre, apellido: nuevoApellido, documentoNro: nuevoDocumentoNro, estado: nuevoEstado },
         });
+        if (nuevaFoto) {
+          try {
+            const formData = new FormData();
+            formData.append('foto', nuevaFoto);
+            await request(`/empleados/${creado.id}/biometria`, {
+              method: 'POST',
+              body: formData,
+              isFormData: true,
+            });
+          } catch (errFoto) {
+            // El personal ya se creó; la biometría se puede reintentar desde la fila
+            // ("Enrolar biometría") sin perder el alta — no tiene sentido revertir todo.
+            setModalAbierto(false);
+            limpiarFotoNueva();
+            cargar();
+            setError(`Personal creado, pero la foto de biometría falló: ${errFoto.message} (reintentá desde "Enrolar biometría" en la fila).`);
+            return;
+          }
+        }
       }
       setModalAbierto(false);
+      limpiarFotoNueva();
       cargar();
     } catch (err) {
-      setError(err.message);
+      // El modal sigue abierto: el error (p.ej. CI duplicado, 409) se muestra adentro,
+      // no en la página de fondo donde el modal lo tapa.
+      setErrorModal(err.message);
+    } finally {
+      setGuardando(false);
     }
   }
 
@@ -226,6 +278,7 @@ function Empleados() {
 
       <Modal abierto={modalAbierto} titulo={empleadoEditando ? 'Editar personal' : 'Agregar personal'} onCerrar={() => setModalAbierto(false)}>
         <form onSubmit={guardar}>
+          {errorModal && <p className="error alerta-modal">⚠ {errorModal}</p>}
           <label className="campo">
             Nombre
             <input placeholder="Nombre" value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)} required />
@@ -247,8 +300,20 @@ function Empleados() {
               </select>
             </label>
           )}
-          <button type="submit">{empleadoEditando ? 'Guardar Cambios' : 'Crear'}</button>
-          <button type="button" onClick={() => setModalAbierto(false)}>Cancelar</button>
+          {!empleadoEditando && (
+            <label className="campo">
+              Foto para biometría (opcional)
+              <div className="foto-biometria-campo">
+                {fotoPreviewUrl && <img src={fotoPreviewUrl} alt="Vista previa" className="foto-biometria-preview" />}
+                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={manejarNuevaFoto} />
+              </div>
+              <span className="ayuda">Cara de frente, buena luz. Si no la subís ahora, podés enrolarla después desde la fila.</span>
+            </label>
+          )}
+          <button type="submit" disabled={guardando}>
+            {guardando ? 'Guardando…' : (empleadoEditando ? 'Guardar Cambios' : 'Crear')}
+          </button>
+          <button type="button" onClick={() => setModalAbierto(false)} disabled={guardando}>Cancelar</button>
         </form>
       </Modal>
     </div>

@@ -3,9 +3,10 @@ const exportExcelService = require('../services/exportExcel.service');
 
 async function listar(req, res, next) {
   try {
-    const { periodo, estado, empleadoId } = req.query;
+    const { periodo, fecha, estado, empleadoId } = req.query;
     const descuentos = await descuentosService.listar({
       periodo,
+      fecha,
       estado,
       empleadoId: empleadoId ? Number(empleadoId) : undefined,
     });
@@ -17,7 +18,8 @@ async function listar(req, res, next) {
 
 async function reporte(req, res, next) {
   try {
-    res.json(await descuentosService.reportePorPeriodo(req.query.periodo));
+    const { periodo, fecha } = req.query;
+    res.json(await descuentosService.reportePorPeriodo({ periodo, fecha }));
   } catch (err) {
     next(err);
   }
@@ -34,8 +36,8 @@ async function avanzar(req, res, next) {
 
 async function exportarReporte(req, res, next) {
   try {
-    const { periodo } = req.query;
-    const reporteData = await descuentosService.reportePorPeriodo(periodo);
+    const { periodo, fecha } = req.query;
+    const reporteData = await descuentosService.reportePorPeriodo({ periodo, fecha });
 
     const buffer = await exportExcelService.generarBuffer('Reporte descuentos', [
       { header: 'Empleado', key: 'empleado_nombre', width: 28 },
@@ -45,7 +47,7 @@ async function exportarReporte(req, res, next) {
     ], reporteData);
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="reporte-descuentos-${periodo}.xlsx"`);
+    res.setHeader('Content-Disposition', `attachment; filename="reporte-descuentos-${fecha || periodo}.xlsx"`);
     res.send(buffer);
   } catch (err) {
     next(err);

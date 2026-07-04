@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import QRCode from 'qrcode';
 import { request } from '../lib/api';
 import { TOTP } from 'totp-generator';
 
 function Pantalla() {
   const { sucursalId } = useParams();
+  const [searchParams] = useSearchParams();
+  const pantallaToken = searchParams.get('k');
   const canvasRef = useRef(null);
   const [error, setError] = useState(null);
   const [segundosRestantes, setSegundosRestantes] = useState(null);
@@ -16,8 +18,9 @@ function Pantalla() {
 
     async function inicializar() {
       try {
-        // Intentamos obtener la llave secreta del servidor (si hay internet)
-        const res = await request(`/sucursales/${sucursalId}/qr`);
+        // Intentamos obtener la llave secreta del servidor (si hay internet).
+        // El token de pantalla (?k=) del enlace copiado en el panel es la credencial.
+        const res = await request(`/sucursales/${sucursalId}/qr?k=${encodeURIComponent(pantallaToken ?? '')}`);
         if (res && res.totpSecret) {
           localStorage.setItem(`totp_secret_${sucursalId}`, res.totpSecret);
           const offset = res.serverTime ? res.serverTime - Date.now() : 0;
@@ -74,7 +77,7 @@ function Pantalla() {
       activo = false;
       clearInterval(intervaloCuenta);
     };
-  }, [sucursalId]);
+  }, [sucursalId, pantallaToken]);
 
   return (
     <div className="pantalla-kiosko">

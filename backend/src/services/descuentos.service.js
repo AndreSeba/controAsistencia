@@ -53,13 +53,21 @@ async function calcularParaEntrada({ marcacionId, empleadoId, minutosAtraso, per
   }, transaction);
 }
 
+const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function validarFecha(fecha) {
+  if (fecha && !FECHA_RE.test(fecha)) throw new DescuentoError('fecha debe tener formato YYYY-MM-DD');
+}
+
 async function listar(filtros) {
+  validarFecha(filtros?.fecha);
   return descuentosRepo.listar(filtros);
 }
 
-async function reportePorPeriodo(periodo) {
-  if (!periodo) throw new DescuentoError('periodo (YYYY-MM) es requerido');
-  return descuentosRepo.reportePorPeriodo(periodo);
+async function reportePorPeriodo({ periodo, fecha } = {}) {
+  if (!periodo && !fecha) throw new DescuentoError('periodo (YYYY-MM) o fecha (YYYY-MM-DD) es requerido');
+  validarFecha(fecha);
+  return descuentosRepo.reportePorPeriodo({ periodo, fecha });
 }
 
 async function avanzarEstado(id, usuarioId, ip) {

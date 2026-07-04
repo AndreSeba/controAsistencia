@@ -31,7 +31,12 @@ const ORIGENES_PERMITIDOS = (process.env.CORS_ORIGINS || '')
 app.use(cors({
   origin(origin, callback) {
     if (!origin || ORIGENES_PERMITIDOS.includes(origin)) return callback(null, true);
-    callback(new Error('Origen no permitido por CORS'));
+    // Con status explícito: sin él, el error handler lo trata como 500 "Error interno"
+    // y desde el cliente es imposible saber que el problema es el origen (p.ej. la IP
+    // de LAN cambió por DHCP y ya no coincide con CORS_ORIGINS).
+    const err = new Error(`Origen no permitido (${origin}). Agregalo a CORS_ORIGINS del backend.`);
+    err.status = 403;
+    callback(err);
   },
   credentials: true,
 }));

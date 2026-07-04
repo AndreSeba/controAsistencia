@@ -1,16 +1,15 @@
 :root {
-  --rojo: #e8424c;
-  --amarillo: #f7b500;
+  --brand: #3b82f6;
   --text: #2c2a30;
-  --text-muted: #b3a89e;
-  --bg: #14100f;
-  --bg-card: #211a17;
-  --border: #3a2d27;
-  --accent: var(--rojo);
-  --error: #ff6b6b;
+  --text-muted: #94a3b8;
+  --bg: #0f1319;
+  --bg-card: #161c25;
+  --border: #2a3441;
+  --accent: var(--brand);
+  --error: #f87171;
 
   font: 18px/1.4 system-ui, 'Segoe UI', Roboto, sans-serif;
-  color: #f5ece4;
+  color: #e5e9f0;
   background: var(--bg);
 }
 
@@ -62,7 +61,7 @@ textarea {
 .tarjeta {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-top: 3px solid var(--rojo);
+  border-top: 3px solid var(--brand);
   border-radius: 16px;
   padding: 28px;
   width: 100%;
@@ -140,6 +139,6 @@ textarea {
   background: #fff;
   color: #111;
 }
-.pantalla-kiosko canvas { border-radius: 16px; border: 8px solid #fff; box-shadow: 0 0 0 4px var(--rojo); }
+.pantalla-kiosko canvas { border-radius: 16px; border: 8px solid #fff; box-shadow: 0 0 0 4px var(--brand); }
 .pantalla-kiosko h1 { color: #111; }
 .pantalla-kiosko .ayuda { color: #6b6375; }

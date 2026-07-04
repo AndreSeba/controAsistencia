@@ -1,7 +1,6 @@
 const { getPool } = require('../config/db');
 const marcacionesRepo = require('../repositories/marcaciones.repository');
 const turnosRepo = require('../repositories/turnos.repository');
-const qrTokenRepo = require('../repositories/qrToken.repository');
 const biometriaRepo = require('../repositories/biometria.repository');
 const auditoriaRepo = require('../repositories/auditoria.repository');
 const livenessService = require('./liveness.service');
@@ -17,10 +16,37 @@ const { TOTP } = require('totp-generator');
 
 const UMBRAL_REVISION_ATRASO_MIN = 60; // P9: > 60 min => requiere_revision (no automático en el monto)
 
+// Online: entre escanear el QR y terminar selfie+envío pasan hasta ~2,5 min; se aceptan
+// tokens de ventanas recientes (y +30s por desfase de reloj del kiosko).
+const TOLERANCIA_ONLINE_MS = [30000, 0, -30000, -60000, -90000, -120000, -150000];
+// Offline: el token debe corresponder al momento declarado del escaneo (±1 ventana).
+const TOLERANCIA_OFFLINE_MS = [30000, 0, -30000];
+const MAX_ANTIGUEDAD_OFFLINE_MS = 48 * 60 * 60 * 1000;
+const MAX_FUTURO_OFFLINE_MS = 5 * 60 * 1000;
+
 class MarcacionError extends Error {
   constructor(message, status = 400) {
     super(message);
     this.status = status;
+  }
+}
+
+// totp-generator v2: TOTP.generate es async — sin await, otp queda undefined y
+// toda comparación falla en silencio. No quitar los await.
+async function totpCoincide(secret, token, timestampMs, offsets) {
+  try {
+    for (const offset of offsets) {
+      const { otp } = await TOTP.generate(secret, { digits: 6, period: 30, timestamp: timestampMs + offset });
+      if (otp === token) return true;
+    }
+    return false;
+  } catch (e) {
+    // La librería lanza si el secreto no es base32 válido (p.ej. secretos hex de una
+    // versión vieja). Sin este catch sería un 500 "Error interno" sin pista alguna.
+    throw new MarcacionError(
+      'El código QR de esta sucursal está mal configurado. Abrí la pantalla de la sucursal de nuevo desde el panel para regenerarlo.',
+      409
+    );
   }
 }
 
@@ -49,28 +75,25 @@ async function registrar({
   await client.query('BEGIN');
 
   try {
-    let qrId = null;
-    let qrTokenGenerado = null;
+    // Ambos caminos validan el TOTP contra el secreto de la sucursal, del lado del
+    // servidor. La tabla qr_token quedó obsoleta con el cambio a TOTP (nadie la puebla).
+    if (!sucursal.totp_secret) {
+      throw new MarcacionError('La sucursal no tiene código QR configurado. Abrí la pantalla de la sucursal una vez para generarlo.', 409);
+    }
 
     if (offlineMode) {
-      if (!sucursal.totp_secret) {
-        throw new MarcacionError('La sucursal no soporta marcación offline (sin TOTP config)', 400);
+      // El timestamp declarado por el cliente solo se acepta dentro de una ventana
+      // razonable: sin esto, una marca "offline" podría fecharse en cualquier momento.
+      const ahoraMs = Date.now();
+      const tsMs = timestampUtc.getTime();
+      if (Number.isNaN(tsMs) || tsMs > ahoraMs + MAX_FUTURO_OFFLINE_MS || tsMs < ahoraMs - MAX_ANTIGUEDAD_OFFLINE_MS) {
+        throw new MarcacionError('Marcación offline con fecha fuera del rango aceptado (máx. 48h)', 422);
       }
-      try {
-        const { otp } = TOTP.generate(sucursal.totp_secret, { digits: 6, period: 30, timestamp: timestampUtc.getTime() });
-        if (otp !== qrToken) {
-          throw new MarcacionError('Código QR (TOTP) inválido o expirado', 401);
-        }
-        qrTokenGenerado = qrToken;
-      } catch (e) {
-        throw new MarcacionError('Error verificando TOTP offline', 401);
+      if (!(await totpCoincide(sucursal.totp_secret, qrToken, tsMs, TOLERANCIA_OFFLINE_MS))) {
+        throw new MarcacionError('Código QR (TOTP) inválido o expirado', 401);
       }
-    } else {
-      const qr = await qrTokenRepo.buscarVigentePorToken(qrToken, client);
-      if (!qr || qr.sucursal_id !== sucursalId) {
-        throw new MarcacionError('Código QR inválido o expirado', 401);
-      }
-      qrId = qr.id;
+    } else if (!(await totpCoincide(sucursal.totp_secret, qrToken, timestampUtc.getTime(), TOLERANCIA_ONLINE_MS))) {
+      throw new MarcacionError('Código QR inválido o expirado', 401);
     }
 
     let liveness = { livenessOk: false, livenessRetoId: null };
@@ -111,6 +134,10 @@ async function registrar({
     if (tipo === 'ENTRADA') {
       const catalogos = await turnosRepo.listarCatalogo();
       const turno = horarioUtil.atribuirTurno(timestampUtc, catalogos);
+      if (!turno) {
+        // Catálogo de turnos vacío: sin esto, turno.id revienta con un 500 sin pista.
+        throw new MarcacionError('No hay turnos configurados en el sistema. Avisá a RRHH.', 409);
+      }
       const fecha = horarioUtil.fechaLocal(timestampUtc);
       turnoJornadaId = await turnosRepo.crear(
         { empleadoId, sucursalId, fecha, turnoCatalogoId: turno.id },
@@ -126,10 +153,12 @@ async function registrar({
 
     // Señal blanda (P-geocerca/identidad) + P9 (atraso > 60 min) + margen de
     // anticipación configurable: nunca bloquea, solo marca para revisión de RRHH.
+    // Offline siempre va a revisión: el timestamp lo declara el cliente y no hubo
+    // reto de liveness — confianza reducida por diseño, RRHH la confirma a mano.
     const margenAnticipacionMin = await configuracionService.obtenerMargenAnticipacion();
     const atrasoExcesivo = minutosAtraso != null && minutosAtraso > UMBRAL_REVISION_ATRASO_MIN;
     const demasiadoTemprano = minutosAnticipacion != null && minutosAnticipacion > margenAnticipacionMin;
-    const estado = (!identidadVerificada || !dentroGeocerca || atrasoExcesivo || demasiadoTemprano)
+    const estado = (offlineMode || !identidadVerificada || !dentroGeocerca || atrasoExcesivo || demasiadoTemprano)
       ? 'requiere_revision'
       : 'registrada';
 
@@ -147,7 +176,7 @@ async function registrar({
       geoCentroLatAplicado: sucursal.geo_lat,
       geoCentroLngAplicado: sucursal.geo_lng,
       geoRadioAplicado: sucursal.geo_radio_m,
-      qrTokenId: qrId,
+      qrTokenId: null,
       selfieUrl,
       livenessOk: liveness.livenessOk,
       livenessRetoId: liveness.livenessRetoId,
@@ -157,7 +186,7 @@ async function registrar({
       minutosAnticipacion,
       estado,
       offlineMode,
-      totpToken: qrTokenGenerado,
+      totpToken: qrToken,
     }, client);
 
     if (tipo === 'ENTRADA') {

@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../lib/AuthContext';
 
 const MESES    = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-const DIAS_HDR = ['L','M','X','J','V','S','D'];
+const DIAS_HDR = ['L','M','M','J','V','S','D'];
 const POR_PAGINA = 10;
 
 const TIPOS_NOVEDAD = [
@@ -29,18 +29,25 @@ function diasDelMes(anio, mes) {
 function offsetLunes(anio, mes) {
   return (new Date(Date.UTC(anio, mes-1, 1)).getUTCDay() + 6) % 7;
 }
-function esFinde(fechaStr) {
-  const d = new Date(fechaStr + 'T12:00:00Z').getUTCDay();
-  return d === 0 || d === 6;
+function esFuturo(fechaStr) {
+  const d = new Date();
+  const hoy = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return fechaStr > hoy;
 }
 function horaLocal(isoStr) {
   if (!isoStr) return null;
   const local = new Date(new Date(isoStr).getTime() - 4*60*60*1000);
   return `${String(local.getUTCHours()).padStart(2,'0')}:${String(local.getUTCMinutes()).padStart(2,'0')}`;
 }
+// Sin franco fijo: el personal trabaja los 7 días con 1 día libre variable a la
+// semana, así que sábado/domingo no se tratan distinto — el franco de cada quien
+// se marca a mano como "Permiso" (novedad), no se asume por calendario.
 function estadoDia(jornadas, novedad, fechaStr) {
   if (novedad) return novedad.tipo;
-  if (!jornadas?.length) return esFinde(fechaStr) ? 'finde' : 'falta';
+  if (!jornadas?.length) {
+    if (esFuturo(fechaStr)) return 'futuro'; // un día que no llegó no es una falta
+    return 'falta';
+  }
   const max = Math.max(...jornadas.map(j => {
     if (j.requiereRevision || j.cierreAutomatico) return 3;
     if (j.minutosAtraso > 0) return 2;
@@ -55,7 +62,10 @@ function tooltipDia(jornadas, novedad, fechaStr) {
     const tipo = TIPOS_NOVEDAD.find(t => t.value === novedad.tipo);
     return `${tipo?.label ?? novedad.tipo}${novedad.nota ? `\n${novedad.nota}` : ''}`;
   }
-  if (!jornadas?.length) return esFinde(fechaStr) ? 'Fin de semana' : 'Sin registro';
+  if (!jornadas?.length) {
+    if (esFuturo(fechaStr)) return fechaStr;
+    return 'Sin registro';
+  }
   return jornadas.map(j => {
     const entrada = horaLocal(j.horaEntrada) ?? '—';
     const salida  = j.salidaMarcada ? (horaLocal(j.horaSalida) ?? '—') : (j.cierreAutomatico ? 'Auto-cerrada' : '—');
@@ -111,7 +121,7 @@ function CalendarioMes({ jMap, nMap, dias, offset, onClickFalta }) {
   return (
     <div className="cal-wrapper">
       <div className="cal-hdr">
-        {DIAS_HDR.map(d => <span key={d} className="cal-hdr-dia">{d}</span>)}
+        {DIAS_HDR.map((d, i) => <span key={i} className="cal-hdr-dia">{d}</span>)}
       </div>
       <div className="cal-grid">
         {Array.from({ length: offset }, (_, i) => <div key={`v${i}`} className="cal-dia cal-dia--vacio" />)}
@@ -138,7 +148,7 @@ function TarjetaEmpleado({ emp, jMap, nMap, dias, offset, onClickFalta }) {
   const presentes   = dias.filter(d => estadoDia(jMap[d], nMap[d], d) === 'ok').length;
   const tardios     = dias.filter(d => estadoDia(jMap[d], nMap[d], d) === 'tarde').length;
   const revision    = dias.filter(d => estadoDia(jMap[d], nMap[d], d) === 'revision').length;
-  const faltas      = dias.filter(d => !esFinde(d) && estadoDia(jMap[d], nMap[d], d) === 'falta').length;
+  const faltas      = dias.filter(d => estadoDia(jMap[d], nMap[d], d) === 'falta').length;
   const bajaMedica  = dias.filter(d => estadoDia(jMap[d], nMap[d], d) === 'baja_medica').length;
   const permisos    = dias.filter(d => estadoDia(jMap[d], nMap[d], d) === 'permiso').length;
 
@@ -324,7 +334,6 @@ function AsistenciaPersonal({ empleados }) {
         <span><span className="cal-dot cal-dot--tarde" />Llegó tarde</span>
         <span><span className="cal-dot cal-dot--revision" />Requiere revisión</span>
         <span><span className="cal-dot cal-dot--falta" />Sin registro</span>
-        <span><span className="cal-dot cal-dot--finde" />Fin de semana</span>
         <span><span className="cal-dot cal-dot--baja_medica" />Baja médica</span>
         <span><span className="cal-dot cal-dot--permiso" />Permiso</span>
       </div>

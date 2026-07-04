@@ -6,12 +6,16 @@ function generarTotpSecret() {
   return Array.from(crypto.randomBytes(32)).map(b => BASE32[b % 32]).join('');
 }
 
+function generarPantallaToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
 async function listar(incluirInactivas) {
   const pool = getPool();
   const where = incluirInactivas ? '' : 'WHERE activo = TRUE';
   const result = await pool.query(`
     SELECT id, nombre, geo_lat, geo_lng, geo_radio_m, wifi_bssid,
-           geo_actualizado_por, geo_actualizado_en, activo
+           geo_actualizado_por, geo_actualizado_en, activo, pantalla_token
     FROM sucursal
     ${where}
     ORDER BY nombre
@@ -22,7 +26,7 @@ async function listar(incluirInactivas) {
 async function obtenerPorId(id, executor = getPool()) {
   const result = await executor.query(
     `SELECT id, nombre, geo_lat, geo_lng, geo_radio_m, wifi_bssid,
-            geo_actualizado_por, geo_actualizado_en, activo, totp_secret
+            geo_actualizado_por, geo_actualizado_en, activo, totp_secret, pantalla_token
      FROM sucursal
      WHERE id = $1`,
     [id]
@@ -32,10 +36,10 @@ async function obtenerPorId(id, executor = getPool()) {
 
 async function crear({ nombre, geoLat, geoLng, geoRadioM, wifiBssid, usuarioId }, executor = getPool()) {
   const result = await executor.query(
-    `INSERT INTO sucursal (nombre, geo_lat, geo_lng, geo_radio_m, wifi_bssid, geo_actualizado_por, totp_secret)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO sucursal (nombre, geo_lat, geo_lng, geo_radio_m, wifi_bssid, geo_actualizado_por, totp_secret, pantalla_token)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING id`,
-    [nombre, geoLat, geoLng, geoRadioM, wifiBssid || null, usuarioId, generarTotpSecret()]
+    [nombre, geoLat, geoLng, geoRadioM, wifiBssid || null, usuarioId, generarTotpSecret(), generarPantallaToken()]
   );
   return result.rows[0].id;
 }
