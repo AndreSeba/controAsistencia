@@ -2,9 +2,14 @@ const express = require('express');
 
 const empleadosController = require('../controllers/empleados.controller');
 const { verificarAccessToken, requierePermiso } = require('../middleware/auth.middleware');
+const { verificarDispositivo } = require('../middleware/dispositivo.middleware');
 const { uploadImagen } = require('../middleware/upload.middleware');
 
 const router = express.Router();
+
+// PWA: perfil del dueño del device token. Definida ANTES del verificarAccessToken
+// global — la pantalla del empleado no tiene JWT, su credencial es el dispositivo.
+router.get('/yo', verificarDispositivo, empleadosController.yo);
 
 router.use(verificarAccessToken);
 

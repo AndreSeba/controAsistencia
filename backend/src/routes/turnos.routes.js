@@ -8,6 +8,8 @@ const router = express.Router();
 router.use(verificarAccessToken);
 
 router.get('/', requierePermiso('turnos', 'puede_ver'), turnosController.listar);
-router.put('/:id', requierePermiso('turnos', 'puede_editar'), turnosController.actualizarHorario);
+router.post('/', requierePermiso('turnos', 'puede_editar'), turnosController.crear);
+router.put('/:id', requierePermiso('turnos', 'puede_editar'), turnosController.actualizar);
+router.delete('/:id', requierePermiso('turnos', 'puede_editar'), turnosController.desactivar);
 
 module.exports = router;

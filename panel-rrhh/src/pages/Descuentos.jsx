@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import { descargarBlob } from '../lib/api';
 import { usePaginacion } from '../hooks/usePaginacion';
 import Paginacion from '../components/Paginacion';
+import { IconGuardar, IconDescargar } from '../components/Icons';
 
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
@@ -11,6 +12,47 @@ function periodoActual() {
   return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
 }
 
+// ── Quincenas de pago: 28 (mes anterior) → 13, y 14 → 27 ───
+// Una quincena se identifica por {anio, mes, mitad}: mitad 1 termina el 13 de
+// ese mes (arranca el 28 del anterior), mitad 2 va del 14 al 27 del mes.
+const pad2 = (n) => String(n).padStart(2, '0');
+
+function quincenaActual() {
+  const hoy = new Date();
+  const d = hoy.getDate(), m = hoy.getMonth() + 1, a = hoy.getFullYear();
+  if (d >= 28) return m === 12 ? { anio: a + 1, mes: 1, mitad: 1 } : { anio: a, mes: m + 1, mitad: 1 };
+  if (d <= 13) return { anio: a, mes: m, mitad: 1 };
+  return { anio: a, mes: m, mitad: 2 };
+}
+
+function rangoQuincena({ anio, mes, mitad }) {
+  if (mitad === 1) {
+    const pm = mes === 1 ? 12 : mes - 1;
+    const pa = mes === 1 ? anio - 1 : anio;
+    return { inicio: `${pa}-${pad2(pm)}-28`, fin: `${anio}-${pad2(mes)}-13` };
+  }
+  return { inicio: `${anio}-${pad2(mes)}-14`, fin: `${anio}-${pad2(mes)}-27` };
+}
+
+function etiquetaQuincena(q) {
+  if (q.mitad === 1) {
+    const pm = q.mes === 1 ? 12 : q.mes - 1;
+    return `28 ${MESES[pm - 1].slice(0, 3)} – 13 ${MESES[q.mes - 1].slice(0, 3)} ${q.anio}`;
+  }
+  return `14 – 27 ${MESES[q.mes - 1].slice(0, 3)} ${q.anio}`;
+}
+
+function navQuincena(q, delta) {
+  if (delta > 0) {
+    if (q.mitad === 1) return { ...q, mitad: 2 };
+    return q.mes === 12 ? { anio: q.anio + 1, mes: 1, mitad: 1 } : { anio: q.anio, mes: q.mes + 1, mitad: 1 };
+  }
+  if (q.mitad === 2) return { ...q, mitad: 1 };
+  return q.mes === 1 ? { anio: q.anio - 1, mes: 12, mitad: 2 } : { anio: q.anio, mes: q.mes - 1, mitad: 2 };
+}
+
+const mismaQuincena = (a, b) => a.anio === b.anio && a.mes === b.mes && a.mitad === b.mitad;
+
 // ── Sección de tarifas ─────────────────────────────────────
 function TarifasAtraso({ request }) {
   const [reglas, setReglas] = useState([]);
@@ -18,6 +60,7 @@ function TarifasAtraso({ request }) {
   const [guardando, setGuardando] = useState(false);
   const [errorTarifas, setErrorTarifas] = useState(null);
   const [ok, setOk] = useState(false);
+  const guardandoRef = useRef(false);
 
   const cargarReglas = useCallback(async () => {
     try {
@@ -36,6 +79,8 @@ function TarifasAtraso({ request }) {
   const sucias = reglas.filter(r => Number(montos[r.id]) !== Number(r.monto_bs));
 
   async function guardar() {
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
     setGuardando(true);
     setErrorTarifas(null);
     setOk(false);
@@ -51,6 +96,7 @@ function TarifasAtraso({ request }) {
     } catch (err) {
       setErrorTarifas(err.message);
     } finally {
+      guardandoRef.current = false;
       setGuardando(false);
     }
   }
@@ -103,7 +149,7 @@ function TarifasAtraso({ request }) {
             onClick={guardar}
             disabled={guardando || sucias.length === 0}
           >
-            {guardando ? 'Guardando…' : `Guardar${sucias.length > 0 ? ` (${sucias.length} cambio${sucias.length > 1 ? 's' : ''})` : ''}`}
+            <IconGuardar /> {guardando ? 'Guardando…' : `Guardar${sucias.length > 0 ? ` (${sucias.length} cambio${sucias.length > 1 ? 's' : ''})` : ''}`}
           </button>
         </div>
       </div>
@@ -116,7 +162,8 @@ function Descuentos() {
   const [periodo, setPeriodo] = useState(periodoActual());
   const [fechaDia, setFechaDia] = useState(''); // '' = todo el mes; con valor filtra ese día
   const [descuentos, setDescuentos] = useState([]);
-  const [reporte, setReporte] = useState([]);
+  const [quincena, setQuincena] = useState(quincenaActual());
+  const [planilla, setPlanilla] = useState({ pagoDiaBs: 10, filas: [] });
   const [error, setError] = useState(null);
   const [busqueda, setBusqueda] = useState('');
 
@@ -135,13 +182,13 @@ function Descuentos() {
   // El filtro que manda: día exacto si está elegido, si no el mes.
   const filtroFechaQuery = fechaDia ? `fecha=${fechaDia}` : `periodo=${periodo}`;
 
-  const reporteFiltrado = reporte.filter(r => {
+  const planillaFiltrada = planilla.filas.filter(f => {
     if (!busqueda) return true;
     const term = busqueda.toLowerCase();
-    const full = `${r.empleado_nombre} ${r.empleado_apellido}`.toLowerCase();
-    return full.includes(term) || r.empleado_documento_nro?.toLowerCase().includes(term);
+    const full = `${f.nombre} ${f.apellido}`.toLowerCase();
+    return full.includes(term) || f.documento_nro?.toLowerCase().includes(term);
   });
-  
+
   const descuentosFiltrados = descuentos.filter(d => {
     if (!busqueda) return true;
     const term = busqueda.toLowerCase();
@@ -149,17 +196,22 @@ function Descuentos() {
     return full.includes(term) || d.empleado_documento_nro?.toLowerCase().includes(term);
   });
 
-  const { datosPaginados: repPaginados, paginaActiva: repPag, totalPaginas: repTotal, irPaginaSiguiente: repSig, irPaginaAnterior: repAnt, setPagina: setRepPag } = usePaginacion(reporteFiltrado, 10);
+  const { datosPaginados: repPaginados, paginaActiva: repPag, totalPaginas: repTotal, irPaginaSiguiente: repSig, irPaginaAnterior: repAnt, setPagina: setRepPag } = usePaginacion(planillaFiltrada, 10);
   const { datosPaginados: descPaginados, paginaActiva: descPag, totalPaginas: descTotal, irPaginaSiguiente: descSig, irPaginaAnterior: descAnt, setPagina: setDescPag } = usePaginacion(descuentosFiltrados, 10);
 
-  async function cargar() {
+  const rango = rangoQuincena(quincena);
+
+  async function cargarDescuentos() {
     try {
-      const [listaDescuentos, listaReporte] = await Promise.all([
-        request(`/descuentos?${filtroFechaQuery}`),
-        request(`/descuentos/reporte?${filtroFechaQuery}`),
-      ]);
-      setDescuentos(listaDescuentos);
-      setReporte(listaReporte);
+      setDescuentos(await request(`/descuentos?${filtroFechaQuery}`));
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function cargarPlanilla() {
+    try {
+      setPlanilla(await request(`/descuentos/planilla?fechaInicio=${rango.inicio}&fechaFin=${rango.fin}`));
     } catch (err) {
       setError(err.message);
     }
@@ -167,18 +219,31 @@ function Descuentos() {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- recarga al cambiar filtros, no sincronización de UI
   useEffect(() => {
-    cargar();
-    setRepPag(1);
+    cargarDescuentos();
     setDescPag(1);
   }, [periodo, fechaDia]);
 
-  const totalPeriodo = reporteFiltrado.reduce((acc, r) => acc + Number(r.total_bs), 0);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- recarga al cambiar quincena
+  useEffect(() => {
+    cargarPlanilla();
+    setRepPag(1);
+  }, [quincena.anio, quincena.mes, quincena.mitad]);
+
+  const totales = planillaFiltrada.reduce(
+    (acc, f) => ({
+      dias: acc.dias + f.dias_trabajados,
+      ganado: acc.ganado + f.ganado_bs,
+      descuentos: acc.descuentos + f.descuentos_bs,
+      total: acc.total + f.total_bs,
+    }),
+    { dias: 0, ganado: 0, descuentos: 0, total: 0 }
+  );
 
   async function descargarExcel() {
     setError(null);
     try {
-      const blob = await request(`/descuentos/reporte/export?${filtroFechaQuery}`, { comoBlob: true });
-      descargarBlob(blob, `reporte-descuentos-${fechaDia || periodo}.xlsx`);
+      const blob = await request(`/descuentos/planilla/export?fechaInicio=${rango.inicio}&fechaFin=${rango.fin}`, { comoBlob: true });
+      descargarBlob(blob, `planilla-${rango.inicio}-a-${rango.fin}.xlsx`);
     } catch (err) {
       setError(err.message);
     }
@@ -220,38 +285,60 @@ function Descuentos() {
       </div>
 
       <div className="card">
-        <h2>Resumen del período</h2>
-        <button type="button" onClick={descargarExcel} disabled={reporte.length === 0}>Descargar Excel</button>
-        {reporte.length === 0 ? (
-          <p className="ayuda">Sin descuentos en este período.</p>
+        <div className="planilla-header">
+          <h2>Planilla quincenal</h2>
+          <div className="mes-nav">
+            <button type="button" onClick={() => setQuincena(navQuincena(quincena, -1))}>◀</button>
+            <span className="mes-label">{etiquetaQuincena(quincena)}</span>
+            <button
+              type="button"
+              onClick={() => setQuincena(navQuincena(quincena, 1))}
+              disabled={mismaQuincena(quincena, quincenaActual())}
+            >▶</button>
+          </div>
+        </div>
+        <p className="subtitulo" style={{ marginTop: 0 }}>
+          Cada día trabajado paga {planilla.pagoDiaBs} Bs, llegue tarde o temprano.
+          Total = ganado − descuentos por atraso de la quincena.
+        </p>
+        <button type="button" onClick={descargarExcel} disabled={planilla.filas.length === 0}><IconDescargar /> Descargar Excel</button>
+        {planilla.filas.length === 0 ? (
+          <p className="ayuda">Sin actividad en esta quincena.</p>
         ) : (
           <table className="tabla">
             <thead>
-              <tr><th>Personal</th><th>Documento</th><th>Cantidad</th><th>Total Bs</th></tr>
+              <tr>
+                <th>Personal</th><th>Documento</th><th>Días trabajados</th>
+                <th>Ganado Bs</th><th>Descuentos Bs</th><th>Total Bs</th>
+              </tr>
             </thead>
             <tbody>
-              {repPaginados.map((r) => (
-                <tr key={r.empleado_id}>
-                  <td>{r.empleado_nombre} {r.empleado_apellido}</td>
-                  <td>{r.empleado_documento_nro}</td>
-                  <td>{r.cantidad_descuentos}</td>
-                  <td>{r.total_bs}</td>
+              {repPaginados.map((f) => (
+                <tr key={f.empleado_id}>
+                  <td>{f.nombre} {f.apellido}</td>
+                  <td>{f.documento_nro}</td>
+                  <td>{f.dias_trabajados}</td>
+                  <td>{f.ganado_bs.toFixed(2)}</td>
+                  <td>{f.descuentos_bs.toFixed(2)}</td>
+                  <td><strong>{f.total_bs.toFixed(2)}</strong></td>
                 </tr>
               ))}
               <tr>
                 <td><strong>Total</strong></td>
                 <td></td>
-                <td></td>
-                <td><strong>{totalPeriodo}</strong></td>
+                <td><strong>{totales.dias}</strong></td>
+                <td><strong>{totales.ganado.toFixed(2)}</strong></td>
+                <td><strong>{totales.descuentos.toFixed(2)}</strong></td>
+                <td><strong>{totales.total.toFixed(2)}</strong></td>
               </tr>
             </tbody>
           </table>
         )}
-        <Paginacion 
-          paginaActiva={repPag} 
-          totalPaginas={repTotal} 
-          irPaginaAnterior={repAnt} 
-          irPaginaSiguiente={repSig} 
+        <Paginacion
+          paginaActiva={repPag}
+          totalPaginas={repTotal}
+          irPaginaAnterior={repAnt}
+          irPaginaSiguiente={repSig}
         />
       </div>
 

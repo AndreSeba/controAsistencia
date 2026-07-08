@@ -54,6 +54,38 @@ async function exportarReporte(req, res, next) {
   }
 }
 
+async function planilla(req, res, next) {
+  try {
+    const { fechaInicio, fechaFin } = req.query;
+    res.json(await descuentosService.planillaQuincenal({ fechaInicio, fechaFin }));
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function exportarPlanilla(req, res, next) {
+  try {
+    const { fechaInicio, fechaFin } = req.query;
+    const { filas, pagoDiaBs } = await descuentosService.planillaQuincenal({ fechaInicio, fechaFin });
+
+    const buffer = await exportExcelService.generarBuffer(`Planilla ${fechaInicio} a ${fechaFin}`, [
+      { header: 'Empleado', key: 'nombre', width: 20 },
+      { header: 'Apellido', key: 'apellido', width: 20 },
+      { header: 'Documento', key: 'documento_nro', width: 16 },
+      { header: 'Días trabajados', key: 'dias_trabajados', width: 16 },
+      { header: `Ganado Bs (${pagoDiaBs}/día)`, key: 'ganado_bs', width: 18 },
+      { header: 'Descuentos Bs', key: 'descuentos_bs', width: 16 },
+      { header: 'Total Bs', key: 'total_bs', width: 14 },
+    ], filas);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="planilla-${fechaInicio}-a-${fechaFin}.xlsx"`);
+    res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function listarReglas(req, res, next) {
   try {
     res.json(await descuentosService.listarReglas());
@@ -76,4 +108,4 @@ async function actualizarRegla(req, res, next) {
   }
 }
 
-module.exports = { listar, reporte, avanzar, exportarReporte, listarReglas, actualizarRegla };
+module.exports = { listar, reporte, avanzar, exportarReporte, planilla, exportarPlanilla, listarReglas, actualizarRegla };

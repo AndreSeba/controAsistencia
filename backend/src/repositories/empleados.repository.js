@@ -1,21 +1,22 @@
 const { getPool } = require('../config/db');
 
-async function crear({ nombre, apellido, documentoNro, hrmsRef }, executor = getPool()) {
+async function crear({ nombre, apellido, documentoNro, hrmsRef, areaTurnoId, telefono, esSupervisor }, executor = getPool()) {
   const result = await executor.query(
-    `INSERT INTO empleado (nombre, apellido, documento_nro, hrms_ref)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO empleado (nombre, apellido, documento_nro, hrms_ref, area_turno_id, telefono, es_supervisor)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING id`,
-    [nombre, apellido, documentoNro, hrmsRef || null]
+    [nombre, apellido, documentoNro, hrmsRef || null, areaTurnoId || null, telefono || null, esSupervisor === true]
   );
   return result.rows[0].id;
 }
 
-async function actualizar(id, { nombre, apellido, documentoNro, estado, hrmsRef }, executor = getPool()) {
+async function actualizar(id, { nombre, apellido, documentoNro, estado, hrmsRef, areaTurnoId, telefono, esSupervisor }, executor = getPool()) {
   await executor.query(
-    `UPDATE empleado 
-     SET nombre = $1, apellido = $2, documento_nro = $3, estado = COALESCE($4, estado), hrms_ref = $5
-     WHERE id = $6`,
-    [nombre, apellido, documentoNro, estado, hrmsRef || null, id]
+    `UPDATE empleado
+     SET nombre = $1, apellido = $2, documento_nro = $3, estado = COALESCE($4, estado), hrms_ref = $5,
+         area_turno_id = $6, telefono = $7, es_supervisor = $8
+     WHERE id = $9`,
+    [nombre, apellido, documentoNro, estado, hrmsRef || null, areaTurnoId || null, telefono || null, esSupervisor === true, id]
   );
 }
 
@@ -32,8 +33,10 @@ async function listar(incluirInactivos) {
   const where = incluirInactivos ? '' : "WHERE e.estado = 'activo'";
   const result = await pool.query(`
     SELECT e.id, e.nombre, e.apellido, e.documento_nro, e.estado, e.hrms_ref, e.created_at,
+           e.area_turno_id, e.telefono, e.es_supervisor, tc.nombre AS area_nombre,
            d.id AS dispositivo_id, b.id AS biometria_id
     FROM empleado e
+    LEFT JOIN turno_catalogo tc ON tc.id = e.area_turno_id
     LEFT JOIN dispositivo_empleado d ON d.empleado_id = e.id AND d.estado = 'activo'
     LEFT JOIN enrolamiento_biometrico b ON b.empleado_id = e.id AND b.estado = 'activo'
     ${where}
@@ -44,9 +47,11 @@ async function listar(incluirInactivos) {
 
 async function obtenerPorId(id, executor = getPool()) {
   const result = await executor.query(
-    `SELECT id, nombre, apellido, documento_nro, estado, hrms_ref, created_at
-     FROM empleado
-     WHERE id = $1`,
+    `SELECT e.id, e.nombre, e.apellido, e.documento_nro, e.estado, e.hrms_ref, e.created_at,
+            e.area_turno_id, e.telefono, e.es_supervisor, tc.nombre AS area_nombre
+     FROM empleado e
+     LEFT JOIN turno_catalogo tc ON tc.id = e.area_turno_id
+     WHERE e.id = $1`,
     [id]
   );
   return result.rows[0] || null;

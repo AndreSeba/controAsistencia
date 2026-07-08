@@ -46,7 +46,7 @@ function Layout() {
           </NavLink>
           <NavLink to="/turnos">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-            Turnos
+            Áreas y horarios
           </NavLink>
         </nav>
         <div className="sidebar-footer">
@@ -55,7 +55,7 @@ function Layout() {
           </div>
           <div className="usuario-acciones">
             <button type="button" onClick={manejarTema} title="Cambiar tema">
-              {tema === 'oscuro' ? '☀️' : '🌙'}
+              {tema === 'oscuro' ? 'Claro' : 'Oscuro'}
             </button>
             <button type="button" onClick={manejarLogout}>Salir</button>
           </div>

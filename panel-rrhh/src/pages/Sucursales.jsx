@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import SelectorUbicacion from '../components/SelectorUbicacion';
 import Modal from '../components/Modal';
 import { urlPantalla } from '../lib/urlPantalla';
 import { usePaginacion } from '../hooks/usePaginacion';
 import Paginacion from '../components/Paginacion';
+import { IconGuardar, IconCrear, IconCancelar, IconCopiar, IconEditar, IconEliminar } from '../components/Icons';
 
 const GEOCERCA_VACIA = { geoLat: null, geoLng: null, geoRadioM: 100 };
 
@@ -18,6 +19,11 @@ function Sucursales() {
   const [editandoId, setEditandoId] = useState(null);
   const [geocercaEdit, setGeocercaEdit] = useState(GEOCERCA_VACIA);
   const [idCopiado, setIdCopiado] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+  // Ref además del state: disabled del DOM se actualiza recién en el próximo
+  // render, y 2 clicks muy rápidos pueden ocurrir antes de ese render.
+  const crearRef = useRef(false);
+  const geocercaRef = useRef(false);
 
   const { datosPaginados, paginaActiva, totalPaginas, irPaginaSiguiente, irPaginaAnterior } = usePaginacion(sucursales, 10);
 
@@ -40,11 +46,14 @@ function Sucursales() {
 
   async function crear(e) {
     e.preventDefault();
+    if (crearRef.current) return;
     setError(null);
     if (nuevaGeocerca.geoLat == null) {
       setError('Marcá la ubicación de la sucursal en el mapa');
       return;
     }
+    crearRef.current = true;
+    setGuardando(true);
     try {
       await request('/sucursales', {
         method: 'POST',
@@ -59,6 +68,9 @@ function Sucursales() {
       cargar();
     } catch (err) {
       setError(err.message);
+    } finally {
+      crearRef.current = false;
+      setGuardando(false);
     }
   }
 
@@ -87,7 +99,10 @@ function Sucursales() {
 
   async function guardarGeocerca(e) {
     e.preventDefault();
+    if (geocercaRef.current) return;
+    geocercaRef.current = true;
     setError(null);
+    setGuardando(true);
     try {
       await request(`/sucursales/${editandoId}/geocerca`, {
         method: 'PUT',
@@ -102,6 +117,9 @@ function Sucursales() {
       cargar();
     } catch (err) {
       setError(err.message);
+    } finally {
+      geocercaRef.current = false;
+      setGuardando(false);
     }
   }
 
@@ -121,7 +139,7 @@ function Sucursales() {
       <p className="subtitulo">Marcá en el mapa dónde está cada sucursal y qué tan amplia es la zona donde se permite marcar asistencia.</p>
       {error && <p className="error">{error}</p>}
 
-      <button type="button" className="boton-nuevo" onClick={abrirCrear}>+ Nueva sucursal</button>
+      <button type="button" className="boton-nuevo" onClick={abrirCrear}><IconCrear /> Nueva sucursal</button>
 
       <table className="tabla">
         <thead>
@@ -137,13 +155,15 @@ function Sucursales() {
               <td>{s.activo ? 'Activa' : 'Inactiva'}</td>
               <td>
                 <span className="enlace-copiable">
-                  <button type="button" onClick={() => copiarEnlace(s)}>Copiar enlace</button>
+                  <button type="button" onClick={() => copiarEnlace(s)}><IconCopiar /> Copiar enlace</button>
                   {idCopiado === s.id && <span className="enlace-copiado">Copiado ✓</span>}
                 </span>
               </td>
               <td>
-                <button type="button" onClick={() => abrirEdicionGeocerca(s)}>Mover ubicación</button>
-                <button type="button" onClick={() => alternarActivo(s)}>{s.activo ? 'Desactivar' : 'Activar'}</button>
+                <button type="button" onClick={() => abrirEdicionGeocerca(s)}><IconEditar /> Mover ubicación</button>
+                <button type="button" onClick={() => alternarActivo(s)}>
+                  {s.activo ? <IconEliminar /> : <IconGuardar />} {s.activo ? 'Desactivar' : 'Activar'}
+                </button>
               </td>
             </tr>
           ))}
@@ -182,7 +202,7 @@ function Sucursales() {
             />
           </label>
 
-          <button type="submit">Guardar sucursal</button>
+          <button type="submit" disabled={guardando}><IconGuardar /> {guardando ? 'Guardando…' : 'Guardar sucursal'}</button>
         </form>
       </Modal>
 
@@ -209,8 +229,8 @@ function Sucursales() {
               onChange={(e) => setGeocercaEdit((g) => ({ ...g, geoRadioM: Number(e.target.value) }))}
             />
           </label>
-          <button type="submit">Guardar cambios</button>
-          <button type="button" onClick={() => setModalAbierto(null)}>Cancelar</button>
+          <button type="submit" disabled={guardando}><IconGuardar /> {guardando ? 'Guardando…' : 'Guardar cambios'}</button>
+          <button type="button" onClick={() => setModalAbierto(null)}><IconCancelar /> Cancelar</button>
         </form>
       </Modal>
     </div>

@@ -21,8 +21,8 @@ async function obtener(req, res, next) {
 
 async function crear(req, res, next) {
   try {
-    const { nombre, apellido, documentoNro, hrmsRef } = req.body;
-    res.status(201).json(await empleadosService.crear({ nombre, apellido, documentoNro, hrmsRef }));
+    const { nombre, apellido, documentoNro, hrmsRef, areaTurnoId, telefono, esSupervisor } = req.body;
+    res.status(201).json(await empleadosService.crear({ nombre, apellido, documentoNro, hrmsRef, areaTurnoId, telefono, esSupervisor }));
   } catch (err) {
     next(err);
   }
@@ -30,10 +30,21 @@ async function crear(req, res, next) {
 
 async function actualizar(req, res, next) {
   try {
-    const { nombre, apellido, documentoNro, estado, hrmsRef } = req.body;
+    const { nombre, apellido, documentoNro, estado, hrmsRef, areaTurnoId, telefono, esSupervisor } = req.body;
     res.json(await empleadosService.actualizar(Number(req.params.id), {
-      nombre, apellido, documentoNro, estado, hrmsRef
+      nombre, apellido, documentoNro, estado, hrmsRef, areaTurnoId, telefono, esSupervisor
     }));
+  } catch (err) {
+    next(err);
+  }
+}
+
+// Perfil mínimo del empleado dueño del device token (PWA): decide si mostrar
+// el botón de "Registrar visita" (solo supervisores).
+async function yo(req, res, next) {
+  try {
+    const emp = await empleadosService.obtenerOFallar(req.dispositivo.empleadoId);
+    res.json({ id: emp.id, nombre: emp.nombre, apellido: emp.apellido, esSupervisor: emp.es_supervisor === true });
   } catch (err) {
     next(err);
   }
@@ -91,6 +102,7 @@ module.exports = {
   obtener,
   crear,
   actualizar,
+  yo,
   enrolarDispositivo,
   obtenerEnlaceDispositivo,
   revocarDispositivo,

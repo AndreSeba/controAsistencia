@@ -8,12 +8,12 @@ async function listar(req, res, next) {
   }
 }
 
-async function actualizarHorario(req, res, next) {
+async function actualizar(req, res, next) {
   try {
-    const { horaInicio, horaFin } = req.body;
-    const turno = await turnosService.actualizarHorario(
+    const { bloques, aplicaDescuento } = req.body;
+    const turno = await turnosService.actualizar(
       Number(req.params.id),
-      { horaInicio, horaFin },
+      { bloques, aplicaDescuento },
       req.usuario.id,
       req.ip
     );
@@ -23,4 +23,22 @@ async function actualizarHorario(req, res, next) {
   }
 }
 
-module.exports = { listar, actualizarHorario };
+async function crear(req, res, next) {
+  try {
+    const { nombre, bloques, aplicaDescuento } = req.body;
+    res.status(201).json(await turnosService.crear({ nombre, bloques, aplicaDescuento }, req.usuario.id, req.ip));
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function desactivar(req, res, next) {
+  try {
+    await turnosService.desactivar(Number(req.params.id), req.usuario.id, req.ip);
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { listar, actualizar, crear, desactivar };

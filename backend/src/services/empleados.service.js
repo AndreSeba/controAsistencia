@@ -7,7 +7,19 @@ class EmpleadoError extends Error {
   }
 }
 
-async function crear({ nombre, apellido, documentoNro, hrmsRef }) {
+function normalizarExtras({ areaTurnoId, telefono, esSupervisor }) {
+  const area = areaTurnoId != null && areaTurnoId !== '' ? Number(areaTurnoId) : null;
+  if (area != null && (!Number.isInteger(area) || area <= 0)) {
+    throw new EmpleadoError('areaTurnoId inválido');
+  }
+  return {
+    areaTurnoId: area,
+    telefono: telefono?.trim() || null,
+    esSupervisor: esSupervisor === true || esSupervisor === 'true',
+  };
+}
+
+async function crear({ nombre, apellido, documentoNro, hrmsRef, areaTurnoId, telefono, esSupervisor }) {
   if (!nombre?.trim()) throw new EmpleadoError('nombre es requerido');
   if (!apellido?.trim()) throw new EmpleadoError('apellido es requerido');
   if (!documentoNro?.trim()) throw new EmpleadoError('documentoNro (CI) es requerido');
@@ -17,15 +29,16 @@ async function crear({ nombre, apellido, documentoNro, hrmsRef }) {
     throw new EmpleadoError(`Ya existe un empleado con ese documento: ${existente.nombre} ${existente.apellido}`, 409);
   }
 
-  const id = await empleadosRepo.crear({ nombre, apellido, documentoNro: documentoNro.trim(), hrmsRef });
+  const extras = normalizarExtras({ areaTurnoId, telefono, esSupervisor });
+  const id = await empleadosRepo.crear({ nombre, apellido, documentoNro: documentoNro.trim(), hrmsRef, ...extras });
   return obtenerOFallar(id);
 }
 
-async function actualizar(id, { nombre, apellido, documentoNro, estado, hrmsRef }) {
+async function actualizar(id, { nombre, apellido, documentoNro, estado, hrmsRef, areaTurnoId, telefono, esSupervisor }) {
   if (!nombre?.trim()) throw new EmpleadoError('nombre es requerido');
   if (!apellido?.trim()) throw new EmpleadoError('apellido es requerido');
   if (!documentoNro?.trim()) throw new EmpleadoError('documentoNro (CI) es requerido');
-  
+
   if (estado && estado !== 'activo' && estado !== 'inactivo') {
     throw new EmpleadoError('estado inválido (debe ser activo o inactivo)');
   }
@@ -35,7 +48,8 @@ async function actualizar(id, { nombre, apellido, documentoNro, estado, hrmsRef 
     throw new EmpleadoError(`Ya existe otro empleado con ese documento: ${existente.nombre} ${existente.apellido}`, 409);
   }
 
-  await empleadosRepo.actualizar(id, { nombre, apellido, documentoNro: documentoNro.trim(), estado, hrmsRef });
+  const extras = normalizarExtras({ areaTurnoId, telefono, esSupervisor });
+  await empleadosRepo.actualizar(id, { nombre, apellido, documentoNro: documentoNro.trim(), estado, hrmsRef, ...extras });
   return obtenerOFallar(id);
 }
 

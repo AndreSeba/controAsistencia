@@ -1,15 +1,18 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { guardarDeviceToken } from '../lib/dispositivoStore';
+import { IconGuardar } from '../components/Icons';
 
 function ConfigurarDispositivo({ onConfigurado }) {
   const [token, setToken] = useState('');
   const [error, setError] = useState(null);
   const [guardando, setGuardando] = useState(false);
+  const guardandoRef = useRef(false);
 
   async function manejarSubmit(e) {
     e.preventDefault();
     const limpio = token.trim();
-    if (!limpio) return;
+    if (!limpio || guardandoRef.current) return;
+    guardandoRef.current = true;
     setError(null);
     setGuardando(true);
     try {
@@ -18,6 +21,7 @@ function ConfigurarDispositivo({ onConfigurado }) {
     } catch {
       setError('No se pudo guardar el código en este dispositivo. Probá de nuevo.');
     } finally {
+      guardandoRef.current = false;
       setGuardando(false);
     }
   }
@@ -39,7 +43,7 @@ function ConfigurarDispositivo({ onConfigurado }) {
           />
           {error && <p className="error">{error}</p>}
           <button type="submit" disabled={guardando}>
-            {guardando ? 'Guardando…' : 'Activar este teléfono'}
+            <IconGuardar /> {guardando ? 'Guardando…' : 'Activar este teléfono'}
           </button>
         </form>
       </div>

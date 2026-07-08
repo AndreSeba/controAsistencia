@@ -3,6 +3,7 @@ import { useAuth } from '../lib/AuthContext';
 import { descargarBlob } from '../lib/api';
 import { usePaginacion } from '../hooks/usePaginacion';
 import Paginacion from '../components/Paginacion';
+import { IconGuardar, IconDescargar } from '../components/Icons';
 
 function Marcaciones() {
   const { request } = useAuth();
@@ -112,7 +113,7 @@ function Marcaciones() {
             ))}
           </select>
         </label>
-        <button type="button" onClick={descargarExcel}>Descargar Excel</button>
+        <button type="button" onClick={descargarExcel}><IconDescargar /> Descargar Excel</button>
       </div>
 
       <table className="tabla">
@@ -149,7 +150,7 @@ function Marcaciones() {
                 ) : m.revisado ? (
                   `Revisada (${m.revisado_por_nombre})`
                 ) : (
-                  <button type="button" onClick={() => marcarRevisada(m.id)}>Marcar revisada</button>
+                  <button type="button" onClick={() => marcarRevisada(m.id)}><IconGuardar /> Marcar revisada</button>
                 )}
               </td>
             </tr>

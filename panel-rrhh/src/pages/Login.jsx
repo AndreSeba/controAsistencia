@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
 
@@ -9,9 +9,14 @@ function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
   const [cargando, setCargando] = useState(false);
+  // Ref además del state: el disabled del botón se aplica recién en el próximo
+  // render — un doble click muy rápido puede disparar 2 logins antes de eso.
+  const cargandoRef = useRef(false);
 
   async function manejarSubmit(e) {
     e.preventDefault();
+    if (cargandoRef.current) return;
+    cargandoRef.current = true;
     setError(null);
     setCargando(true);
     try {
@@ -20,6 +25,7 @@ function Login() {
     } catch (err) {
       setError(err.message);
     } finally {
+      cargandoRef.current = false;
       setCargando(false);
     }
   }

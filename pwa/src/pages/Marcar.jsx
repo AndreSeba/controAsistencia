@@ -4,6 +4,7 @@ import { useCamara } from '../lib/useCamara';
 import { request, ApiError } from '../lib/api';
 import { obtenerUbicacion } from '../lib/geolocalizacion';
 import { guardarMarcacionOffline, sincronizarPendientes } from '../lib/offlineSync';
+import { IconEntrada, IconSalida, IconVisita, IconVolver } from '../components/Icons';
 
 const SEGUNDOS_PARA_CAPTURAR = 3;
 
@@ -87,14 +88,22 @@ function PasoSelfie({ onCapturada }) {
   );
 }
 
-function PasoElegirTipo({ onElegir }) {
+// El supervisor no marca su propia asistencia (no cobra por día trabajado vía este
+// sistema) — solo ve el botón de visita. El resto del personal ve Entrada/Salida.
+function PasoElegirTipo({ onElegir, esSupervisor, onVisita }) {
   return (
     <div className="pantalla-centrada">
       <div className="tarjeta">
-        <h1>¿Qué vas a marcar?</h1>
+        <h1>{esSupervisor ? 'Registrar visita' : '¿Qué vas a marcar?'}</h1>
         <div className="botones-tipo">
-          <button type="button" onClick={() => onElegir('ENTRADA')}>⬆ Entrada</button>
-          <button type="button" onClick={() => onElegir('SALIDA')}>⬇ Salida</button>
+          {esSupervisor ? (
+            <button type="button" className="boton-visita" onClick={onVisita}><IconVisita /> Registrar visita a sucursal</button>
+          ) : (
+            <>
+              <button type="button" onClick={() => onElegir('ENTRADA')}><IconEntrada /> Entrada</button>
+              <button type="button" onClick={() => onElegir('SALIDA')}><IconSalida /> Salida</button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -108,10 +117,47 @@ function Marcar({ deviceToken }) {
   const [reto, setReto] = useState(null);
   const [resultado, setResultado] = useState(null);
   const [error, setError] = useState(null);
+  const [esSupervisor, setEsSupervisor] = useState(false);
+
+  // Saber si el dueño del dispositivo es supervisor (muestra el botón de visitas).
+  // Si falla (offline, etc.) simplemente no se muestra el botón — no bloquea marcar.
+  useEffect(() => {
+    request('/empleados/yo', { deviceToken })
+      .then((yo) => setEsSupervisor(yo.esSupervisor === true))
+      .catch(() => {});
+  }, [deviceToken]);
 
   function manejarTipoElegido(tipo) {
     setTipoElegido(tipo);
     setPaso('escaneando');
+  }
+
+  async function manejarQrVisita(datos) {
+    setPaso('enviandoVisita');
+    try {
+      let ubicacion = { lat: null, lng: null };
+      try {
+        ubicacion = await obtenerUbicacion();
+      } catch {
+        // Sin GPS la visita igual se registra (queda "Sin GPS" en el reporte).
+      }
+      const visita = await request('/visitas', {
+        method: 'POST',
+        deviceToken,
+        body: {
+          sucursalId: datos.sucursalId,
+          qrToken: datos.token,
+          gpsLat: ubicacion.lat,
+          gpsLng: ubicacion.lng,
+        },
+      });
+      setResultado({ estado: 'visita_ok', sucursal: visita.sucursal });
+      setPaso('resultado');
+    } catch (err) {
+      const mensaje = err instanceof ApiError ? err.message : 'No se pudo registrar la visita. Probá de nuevo.';
+      setError(mensaje);
+      setPaso('error');
+    }
   }
 
   // Sincronizar en segundo plano al recuperar la conexión
@@ -239,11 +285,29 @@ function Marcar({ deviceToken }) {
   }
 
   if (paso === 'elegirTipo') {
-    return <PasoElegirTipo onElegir={manejarTipoElegido} />;
+    return (
+      <PasoElegirTipo
+        onElegir={manejarTipoElegido}
+        esSupervisor={esSupervisor}
+        onVisita={() => setPaso('escaneandoVisita')}
+      />
+    );
   }
 
   if (paso === 'escaneando') {
     return <PasoEscaneo onDetectado={manejarQrDetectado} />;
+  }
+
+  if (paso === 'escaneandoVisita') {
+    return <PasoEscaneo onDetectado={manejarQrVisita} />;
+  }
+
+  if (paso === 'enviandoVisita') {
+    return (
+      <div className="pantalla-centrada">
+        <p>Registrando tu visita…</p>
+      </div>
+    );
   }
 
   if (paso === 'reto') {
@@ -259,12 +323,24 @@ function Marcar({ deviceToken }) {
   }
 
   if (paso === 'resultado') {
+    if (resultado.estado === 'visita_ok') {
+      return (
+        <div className="pantalla-centrada">
+          <div className="tarjeta resultado">
+            <p className="icono-resultado">Listo</p>
+            <h1>Visita registrada</h1>
+            <p className="ayuda">{resultado.sucursal}</p>
+            <button type="button" onClick={reintentar}><IconVolver /> Volver</button>
+          </div>
+        </div>
+      );
+    }
     const offline = resultado.estado === 'registrada_offline';
     const exito = resultado.estado === 'registrada' || offline;
     return (
       <div className="pantalla-centrada">
         <div className="tarjeta resultado">
-          <p className="icono-resultado">{exito ? '✅' : '⚠️'}</p>
+          <p className={`icono-resultado${exito ? '' : ' atencion'}`}>{exito ? 'Listo' : 'Atención'}</p>
           <h1>{resultado.tipo === 'ENTRADA' ? 'Entrada registrada' : 'Salida registrada'}</h1>
           {!exito && <p className="ayuda">Quedó marcada para revisión, pero tu marca ya quedó guardada.</p>}
           {offline && (
@@ -273,7 +349,7 @@ function Marcar({ deviceToken }) {
                <p style={{fontSize:'0.9rem'}}>La marcación se guardó en tu dispositivo. Se enviará automáticamente cuando recuperes el internet.</p>
              </div>
           )}
-          <button type="button" onClick={reintentar}>Volver a marcar</button>
+          <button type="button" onClick={reintentar}><IconVolver /> Volver a marcar</button>
         </div>
       </div>
     );
@@ -283,7 +359,7 @@ function Marcar({ deviceToken }) {
     <div className="pantalla-centrada">
       <div className="tarjeta">
         <p className="error">{error}</p>
-        <button type="button" onClick={reintentar}>Reintentar</button>
+        <button type="button" onClick={reintentar}><IconVolver /> Reintentar</button>
       </div>
     </div>
   );

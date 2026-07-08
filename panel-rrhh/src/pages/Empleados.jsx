@@ -1,19 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import Modal from '../components/Modal';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { urlActivacion } from '../lib/urlPantalla';
 import { usePaginacion } from '../hooks/usePaginacion';
 import Paginacion from '../components/Paginacion';
+import { IconGuardar, IconCrear, IconEditar, IconCancelar, IconCopiar, IconDispositivo, IconCamara } from '../components/Icons';
 
 function Empleados() {
   const { request } = useAuth();
   const [empleados, setEmpleados] = useState([]);
+  const [areas, setAreas] = useState([]);
   const [error, setError] = useState(null);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [nuevoApellido, setNuevoApellido] = useState('');
   const [nuevoDocumentoNro, setNuevoDocumentoNro] = useState('');
   const [nuevoEstado, setNuevoEstado] = useState('activo');
+  const [nuevaArea, setNuevaArea] = useState('');
+  const [nuevoTelefono, setNuevoTelefono] = useState('');
+  const [nuevoEsSupervisor, setNuevoEsSupervisor] = useState(false);
   const [tokenEmitido, setTokenEmitido] = useState(null);
   const [idCopiado, setIdCopiado] = useState(null);
   const fotoInputRef = useRef(null);
@@ -23,7 +29,9 @@ function Empleados() {
   const [nuevaFoto, setNuevaFoto] = useState(null);
   const [fotoPreviewUrl, setFotoPreviewUrl] = useState(null);
   const [guardando, setGuardando] = useState(false);
+  const guardandoRef = useRef(false);
   const [errorModal, setErrorModal] = useState(null); // errores del formulario, visibles DENTRO del modal
+  const [dispositivoARevocar, setDispositivoARevocar] = useState(null); // { empleadoId, dispositivoId, nombreCompleto }
 
   const empleadosFiltrados = empleados.filter(emp => {
     if (!busqueda) return true;
@@ -43,7 +51,12 @@ function Empleados() {
 
   async function cargar() {
     try {
-      setEmpleados(await request('/empleados?incluirInactivos=true'));
+      const [listaEmpleados, listaAreas] = await Promise.all([
+        request('/empleados?incluirInactivos=true'),
+        request('/turnos'),
+      ]);
+      setEmpleados(listaEmpleados);
+      setAreas(listaAreas);
     } catch (err) {
       setError(err.message);
     }
@@ -66,6 +79,9 @@ function Empleados() {
     setNuevoApellido('');
     setNuevoDocumentoNro('');
     setNuevoEstado('activo');
+    setNuevaArea('');
+    setNuevoTelefono('');
+    setNuevoEsSupervisor(false);
     limpiarFotoNueva();
     setErrorModal(null);
     setModalAbierto(true);
@@ -77,6 +93,9 @@ function Empleados() {
     setNuevoApellido(emp.apellido);
     setNuevoDocumentoNro(emp.documento_nro);
     setNuevoEstado(emp.estado || 'activo');
+    setNuevaArea(emp.area_turno_id != null ? String(emp.area_turno_id) : '');
+    setNuevoTelefono(emp.telefono ?? '');
+    setNuevoEsSupervisor(emp.es_supervisor === true);
     limpiarFotoNueva();
     setErrorModal(null);
     setModalAbierto(true);
@@ -94,20 +113,25 @@ function Empleados() {
 
   async function guardar(e) {
     e.preventDefault();
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
     setError(null);
     setErrorModal(null);
     setGuardando(true);
     try {
+      const datos = {
+        nombre: nuevoNombre,
+        apellido: nuevoApellido,
+        documentoNro: nuevoDocumentoNro,
+        estado: nuevoEstado,
+        areaTurnoId: nuevaArea || null,
+        telefono: nuevoTelefono,
+        esSupervisor: nuevoEsSupervisor,
+      };
       if (empleadoEditando) {
-        await request(`/empleados/${empleadoEditando.id}`, {
-          method: 'PUT',
-          body: { nombre: nuevoNombre, apellido: nuevoApellido, documentoNro: nuevoDocumentoNro, estado: nuevoEstado },
-        });
+        await request(`/empleados/${empleadoEditando.id}`, { method: 'PUT', body: datos });
       } else {
-        const creado = await request('/empleados', {
-          method: 'POST',
-          body: { nombre: nuevoNombre, apellido: nuevoApellido, documentoNro: nuevoDocumentoNro, estado: nuevoEstado },
-        });
+        const creado = await request('/empleados', { method: 'POST', body: datos });
         if (nuevaFoto) {
           try {
             const formData = new FormData();
@@ -136,6 +160,7 @@ function Empleados() {
       // no en la página de fondo donde el modal lo tapa.
       setErrorModal(err.message);
     } finally {
+      guardandoRef.current = false;
       setGuardando(false);
     }
   }
@@ -164,7 +189,9 @@ function Empleados() {
     }
   }
 
-  async function revocarDispositivo(empleadoId, dispositivoId) {
+  async function confirmarRevocarDispositivo() {
+    const { empleadoId, dispositivoId } = dispositivoARevocar;
+    setDispositivoARevocar(null);
     setError(null);
     try {
       await request(`/empleados/${empleadoId}/dispositivo/${dispositivoId}`, { method: 'DELETE' });
@@ -222,7 +249,7 @@ function Empleados() {
           }}
           style={{ padding: '8px', width: '300px', borderRadius: '4px', border: '1px solid #ccc' }}
         />
-        <button type="button" className="boton-nuevo" onClick={abrirCrear}>+ Agregar personal</button>
+        <button type="button" className="boton-nuevo" onClick={abrirCrear}><IconCrear /> Agregar personal</button>
       </div>
 
       <input
@@ -236,33 +263,35 @@ function Empleados() {
       <table className="tabla">
         <thead>
           <tr>
-            <th>Nombre</th><th>Apellido</th><th>Documento</th><th>Estado</th><th>Acciones</th><th>Dispositivo</th><th>Biometría</th>
+            <th>Nombre</th><th>Apellido</th><th>Documento</th><th>Área</th><th>Teléfono</th><th>Estado</th><th>Acciones</th><th>Dispositivo</th><th>Biometría</th>
           </tr>
         </thead>
         <tbody>
           {datosPaginados.map((emp) => (
             <tr key={emp.id}>
-              <td>{emp.nombre}</td>
+              <td>{emp.nombre}{emp.es_supervisor && <span className="badge-supervisor" title="Supervisor de sucursales"> (Supervisor)</span>}</td>
               <td>{emp.apellido}</td>
               <td>{emp.documento_nro}</td>
+              <td>{emp.area_nombre ?? '—'}</td>
+              <td>{emp.telefono ?? '—'}</td>
               <td>{emp.estado}</td>
               <td>
-                <button type="button" onClick={() => abrirEditar(emp)}>Editar</button>
+                <button type="button" className="boton-icono" title="Editar" aria-label="Editar" onClick={() => abrirEditar(emp)}><IconEditar /></button>
               </td>
               <td>{emp.dispositivo_id ? 'Activo' : 'Sin enrolar'}</td>
               <td>{emp.biometria_id ? 'Activa' : 'Sin enrolar'}</td>
               <td>
                 {emp.dispositivo_id ? (
                   <>
-                    <button type="button" onClick={() => copiarEnlace(emp.id)}>Copiar enlace</button>
+                    <button type="button" onClick={() => copiarEnlace(emp.id)}><IconCopiar /> Copiar enlace</button>
                     {idCopiado === emp.id && <span className="enlace-copiado">Copiado ✓</span>}
-                    <button type="button" onClick={() => revocarDispositivo(emp.id, emp.dispositivo_id)}>Revocar dispositivo</button>
+                    <button type="button" onClick={() => setDispositivoARevocar({ empleadoId: emp.id, dispositivoId: emp.dispositivo_id, nombreCompleto: `${emp.nombre} ${emp.apellido}` })}><IconCancelar /> Revocar dispositivo</button>
                   </>
                 ) : (
-                  <button type="button" onClick={() => enrolarDispositivo(emp.id)}>Enrolar dispositivo</button>
+                  <button type="button" onClick={() => enrolarDispositivo(emp.id)}><IconDispositivo /> Enrolar dispositivo</button>
                 )}
                 <button type="button" onClick={() => abrirSelectorFoto(emp.id)}>
-                  {emp.biometria_id ? 'Re-enrolar biometría' : 'Enrolar biometría'}
+                  <IconCamara /> {emp.biometria_id ? 'Re-enrolar biometría' : 'Enrolar biometría'}
                 </button>
               </td>
             </tr>
@@ -278,7 +307,7 @@ function Empleados() {
 
       <Modal abierto={modalAbierto} titulo={empleadoEditando ? 'Editar personal' : 'Agregar personal'} onCerrar={() => setModalAbierto(false)}>
         <form onSubmit={guardar}>
-          {errorModal && <p className="error alerta-modal">⚠ {errorModal}</p>}
+          {errorModal && <p className="error alerta-modal">{errorModal}</p>}
           <label className="campo">
             Nombre
             <input placeholder="Nombre" value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)} required />
@@ -290,6 +319,27 @@ function Empleados() {
           <label className="campo">
             Documento (CI)
             <input placeholder="Documento (CI)" value={nuevoDocumentoNro} onChange={(e) => setNuevoDocumentoNro(e.target.value)} required />
+          </label>
+          <label className="campo">
+            Área de trabajo
+            <select value={nuevaArea} onChange={(e) => setNuevaArea(e.target.value)}>
+              <option value="">Sin área asignada</option>
+              {areas.map((a) => (
+                <option key={a.id} value={a.id}>{a.nombre} ({(a.bloques || []).map((b) => `${b.hora_inicio}–${b.hora_fin}`).join(' / ') || '—'})</option>
+              ))}
+            </select>
+            <span className="ayuda">El atraso se calcula contra el horario del área. Las áreas se administran en "Áreas y horarios".</span>
+          </label>
+          <label className="campo">
+            Teléfono
+            <input type="tel" placeholder="Ej: 70012345" value={nuevoTelefono} onChange={(e) => setNuevoTelefono(e.target.value)} />
+          </label>
+          <label className="campo campo-check">
+            <span>
+              <input type="checkbox" checked={nuevoEsSupervisor} onChange={(e) => setNuevoEsSupervisor(e.target.checked)} />
+              {' '}Es supervisor de sucursales
+            </span>
+            <span className="ayuda">Los supervisores pueden registrar visitas a sucursales desde su celular.</span>
           </label>
           {empleadoEditando && (
             <label className="campo">
@@ -311,11 +361,19 @@ function Empleados() {
             </label>
           )}
           <button type="submit" disabled={guardando}>
-            {guardando ? 'Guardando…' : (empleadoEditando ? 'Guardar Cambios' : 'Crear')}
+            {empleadoEditando ? <IconGuardar /> : <IconCrear />} {guardando ? 'Guardando…' : (empleadoEditando ? 'Guardar Cambios' : 'Crear')}
           </button>
-          <button type="button" onClick={() => setModalAbierto(false)} disabled={guardando}>Cancelar</button>
+          <button type="button" onClick={() => setModalAbierto(false)} disabled={guardando}><IconCancelar /> Cancelar</button>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        abierto={dispositivoARevocar != null}
+        titulo="Revocar dispositivo"
+        mensaje={dispositivoARevocar && `¿Revocar el dispositivo de ${dispositivoARevocar.nombreCompleto}? Va a tener que volver a enrolarlo para poder marcar de nuevo.`}
+        onConfirmar={confirmarRevocarDispositivo}
+        onCancelar={() => setDispositivoARevocar(null)}
+      />
     </div>
   );
 }

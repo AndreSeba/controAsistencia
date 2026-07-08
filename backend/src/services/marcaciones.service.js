@@ -1,6 +1,7 @@
 const { getPool } = require('../config/db');
 const marcacionesRepo = require('../repositories/marcaciones.repository');
 const turnosRepo = require('../repositories/turnos.repository');
+const empleadosRepo = require('../repositories/empleados.repository');
 const biometriaRepo = require('../repositories/biometria.repository');
 const auditoriaRepo = require('../repositories/auditoria.repository');
 const livenessService = require('./liveness.service');
@@ -131,22 +132,45 @@ async function registrar({
     let turnoJornadaId;
     let minutosAtraso = null;
     let minutosAnticipacion = null;
+    let aplicaDescuento = true; // default
     if (tipo === 'ENTRADA') {
-      const catalogos = await turnosRepo.listarCatalogo();
-      const turno = horarioUtil.atribuirTurno(timestampUtc, catalogos);
+      // El atraso se calcula contra el horario del BLOQUE más cercano del ÁREA del
+      // empleado si tiene una asignada. Fallback: turno+bloque más cercano a la
+      // hora de llegada, como antes, para empleados sin área.
+      let turno = null;
+      let bloque = null;
+      const empleado = await empleadosRepo.obtenerPorId(empleadoId);
+      if (empleado?.area_turno_id) {
+        turno = await turnosRepo.obtenerCatalogoPorId(empleado.area_turno_id, client);
+        if (turno) {
+          bloque = horarioUtil.atribuirBloque(timestampUtc, turno.bloques);
+        }
+      }
       if (!turno) {
+        const catalogos = await turnosRepo.listarCatalogo();
+        const resultado = horarioUtil.atribuirTurno(timestampUtc, catalogos);
+        if (resultado) {
+          turno = resultado.turno;
+          bloque = resultado.bloque;
+        }
+      }
+      if (!turno || !bloque) {
         // Catálogo de turnos vacío: sin esto, turno.id revienta con un 500 sin pista.
         throw new MarcacionError('No hay turnos configurados en el sistema. Avisá a RRHH.', 409);
       }
+
+      aplicaDescuento = turno.aplica_descuento !== false;
+
       const fecha = horarioUtil.fechaLocal(timestampUtc);
       turnoJornadaId = await turnosRepo.crear(
         { empleadoId, sucursalId, fecha, turnoCatalogoId: turno.id },
         client
       );
-      minutosAtraso = horarioUtil.calcularMinutosAtraso(timestampUtc, turno);
-      minutosAnticipacion = horarioUtil.calcularMinutosAnticipacion(timestampUtc, turno);
+      minutosAtraso = horarioUtil.calcularMinutosAtraso(timestampUtc, bloque);
+      minutosAnticipacion = horarioUtil.calcularMinutosAnticipacion(timestampUtc, bloque);
     } else {
       turnoJornadaId = jornadaAbierta.id;
+      aplicaDescuento = jornadaAbierta.aplica_descuento !== false;
     }
 
     const selfieUrl = await almacenamientoService.guardar('marcaciones', selfieBuffer, selfieMimetype);
@@ -189,7 +213,9 @@ async function registrar({
       totpToken: qrToken,
     }, client);
 
-    if (tipo === 'ENTRADA') {
+    // Solo generar descuento si el área tiene aplica_descuento = true.
+    // El atraso queda registrado en la marcación de todas formas (para reportes).
+    if (tipo === 'ENTRADA' && aplicaDescuento) {
       await descuentosService.calcularParaEntrada({
         marcacionId: marcacion.id,
         empleadoId,

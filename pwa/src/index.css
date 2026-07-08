@@ -30,8 +30,13 @@ button {
   font-size: 17px;
   font-weight: 600;
   width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), opacity 150ms ease;
 }
+button svg { flex-shrink: 0; }
 button:active:not(:disabled) { transform: scale(0.97); }
 button:disabled { opacity: 0.5; }
 
@@ -76,20 +81,31 @@ textarea {
 
 .tarjeta.resultado { text-align: center; }
 .icono-resultado {
-  font-size: 48px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2dbe6c;
   margin-bottom: 8px;
   display: inline-block;
   opacity: 1;
   transform: scale(1);
   transition: opacity 280ms ease-out, transform 280ms cubic-bezier(0.23, 1, 0.32, 1);
 }
+.icono-resultado.atencion { color: var(--error); }
 @starting-style {
   .icono-resultado { opacity: 0; transform: scale(0.7); }
 }
 
 .botones-tipo { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
-.botones-tipo button:first-child { background: #2dbe6c; }
-.botones-tipo button:last-child { background: #e0673e; }
+.botones-tipo button:nth-child(1) { background: #2dbe6c; }
+.botones-tipo button:nth-child(2) { background: #e0673e; }
+.botones-tipo .boton-visita {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: #e5e9f0;
+  font-size: 15px;
+}
 
 .paso-camara {
   min-height: 100svh;

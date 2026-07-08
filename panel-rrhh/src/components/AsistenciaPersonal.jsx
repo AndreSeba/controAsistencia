@@ -1,5 +1,6 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { useAuth } from '../lib/AuthContext';
+import { IconGuardar, IconEliminar } from './Icons';
 
 const MESES    = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const DIAS_HDR = ['L','M','M','J','V','S','D'];
@@ -104,11 +105,11 @@ function ModalNovedad({ info, onGuardar, onEliminar, onCerrar, guardando }) {
         <div className="novedad-acciones">
           {info.novedad && (
             <button type="button" className="btn-quitar" onClick={onEliminar} disabled={guardando}>
-              Quitar justificación
+              <IconEliminar /> Quitar justificación
             </button>
           )}
           <button type="button" onClick={() => onGuardar({ tipo, nota })} disabled={guardando}>
-            {guardando ? 'Guardando…' : 'Guardar'}
+            <IconGuardar /> {guardando ? 'Guardando…' : 'Guardar'}
           </button>
         </div>
       </div>
@@ -185,6 +186,7 @@ function AsistenciaPersonal({ empleados }) {
   const [pagina, setPagina]       = useState(1);
   const [modal, setModal]         = useState(null); // { empId, empNombre, fecha, novedad|null }
   const [guardando, setGuardando] = useState(false);
+  const guardandoRef = useRef(false);
 
   const hoy = new Date();
   const esPresente = anio === hoy.getFullYear() && mes === hoy.getMonth() + 1;
@@ -236,6 +238,8 @@ function AsistenciaPersonal({ empleados }) {
   }
 
   async function guardarNovedad({ tipo, nota }) {
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
     setGuardando(true);
     try {
       await request('/novedades', {
@@ -247,11 +251,14 @@ function AsistenciaPersonal({ empleados }) {
     } catch (err) {
       setError(err.message);
     } finally {
+      guardandoRef.current = false;
       setGuardando(false);
     }
   }
 
   async function eliminarNovedad() {
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
     setGuardando(true);
     try {
       await request(`/novedades/${modal.empId}/${modal.fecha}`, { method: 'DELETE' });
@@ -260,6 +267,7 @@ function AsistenciaPersonal({ empleados }) {
     } catch (err) {
       setError(err.message);
     } finally {
+      guardandoRef.current = false;
       setGuardando(false);
     }
   }

@@ -167,6 +167,158 @@ async function main() {
   });
   check('PUT /reglas con monto negativo → 400', reglaMal.status === 400);
 
+  // ── Configuración: pago por día ──
+  const config = await fetch(`${BASE}/configuracion`, { headers: auth }).then(r => r.json());
+  check('GET /configuracion incluye pagoDiaBs', typeof config.pagoDiaBs === 'number', `pagoDiaBs=${config.pagoDiaBs}`);
+
+  // ── Perfil del dispositivo (PWA) ──
+  const yo = await fetch(`${BASE}/empleados/yo`, { headers: { 'x-device-token': disp.device_token } });
+  const yoBody = await yo.json();
+  check('GET /empleados/yo con device token → 200', yo.status === 200 && typeof yoBody.esSupervisor === 'boolean');
+
+  // ── Áreas con horario partido (caso real: Administración 08-12 y 14:30-18:30) ──
+  const areaPartida = await fetch(`${BASE}/turnos`, {
+    method: 'POST',
+    headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      nombre: 'ADMIN SMOKE',
+      bloques: [{ horaInicio: '08:00', horaFin: '12:00' }, { horaInicio: '14:30', horaFin: '18:30' }],
+      aplicaDescuento: false,
+    }),
+  });
+  const areaBody = await areaPartida.json();
+  check('POST /turnos con 2 bloques → 201', areaPartida.status === 201, areaBody.nombre);
+  check('El área devuelve los 2 bloques', areaBody.bloques?.length === 2
+    && areaBody.bloques[0].hora_inicio === '08:00' && areaBody.bloques[1].hora_inicio === '14:30');
+  check('aplica_descuento=false persistido', areaBody.aplica_descuento === false);
+
+  // Bloques que se solapan o no respetan el orden → rechazado
+  const areaSolapada = await fetch(`${BASE}/turnos`, {
+    method: 'POST',
+    headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      nombre: 'SOLAPADA SMOKE',
+      bloques: [{ horaInicio: '08:00', horaFin: '14:00' }, { horaInicio: '12:00', horaFin: '18:00' }],
+    }),
+  });
+  check('POST /turnos con bloques solapados → 400', areaSolapada.status === 400);
+
+  // Área normal de 1 bloque para comparar
+  const areaSimple = await fetch(`${BASE}/turnos`, {
+    method: 'POST',
+    headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nombre: 'SIMPLE SMOKE', bloques: [{ horaInicio: '06:15', horaFin: '14:15' }] }),
+  });
+  const areaSimpleBody = await areaSimple.json();
+  check('POST /turnos con 1 bloque → 201', areaSimple.status === 201);
+
+  const empActual = await fetch(`${BASE}/empleados/${disp.empleado_id}`, { headers: auth }).then(r => r.json());
+  async function actualizarEmpleado(extra) {
+    return fetch(`${BASE}/empleados/${disp.empleado_id}`, {
+      method: 'PUT',
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nombre: empActual.nombre, apellido: empActual.apellido, documentoNro: empActual.documento_nro,
+        telefono: empActual.telefono, esSupervisor: empActual.es_supervisor, ...extra,
+      }),
+    });
+  }
+
+  const empConArea = await actualizarEmpleado({ areaTurnoId: areaBody.id });
+  const empConAreaBody = await empConArea.json();
+  check('PUT /empleados asigna área partida', empConArea.status === 200 && empConAreaBody.area_nombre === 'ADMIN SMOKE');
+
+  // Asegurar que no quede una jornada ABIERTA de un test anterior — si no, la
+  // próxima marcación resolvería como SALIDA y nunca se calcularía atraso.
+  await pool.query(
+    "UPDATE turno_jornada SET estado = 'CERRADO', salida_marcada = TRUE WHERE empleado_id = $1 AND estado = 'ABIERTO'",
+    [disp.empleado_id]
+  );
+
+  // ── El caso real: marcar entrada a las 14:35 (vuelta del almuerzo) debe dar
+  // atraso ~5 min contra el bloque 2 (14:30), NO ~390 min contra el bloque 1 (08:00).
+  const hoy = new Date();
+  const hoy1435 = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate(), 18, 35)); // 14:35 Bolivia = 18:35 UTC
+  const { otp: otp1435 } = await TOTP.generate(suc.totp_secret, { digits: 6, period: 30, timestamp: hoy1435.getTime() });
+  const marcTarde = await fetch(`${BASE}/marcaciones`, {
+    method: 'POST',
+    headers: { 'x-device-token': disp.device_token },
+    body: formMarcacion({
+      sucursalId: suc.id, qrToken: otp1435, livenessNonce: 'offline-x',
+      extra: { offlineMode: 'true', timestampOffline: hoy1435.getTime() },
+    }),
+  });
+  const marcTardeBody = await marcTarde.json();
+  const marcTardeFila = marcTarde.status === 201
+    ? (await pool.query('SELECT minutos_atraso, tipo FROM marcacion WHERE id = $1', [marcTardeBody.id])).rows[0]
+    : null;
+  check('Entrada 14:35 en área partida → atraso contra bloque 2 (~5 min, no ~390)',
+    marcTarde.status === 201 && marcTardeFila?.tipo === 'ENTRADA'
+      && marcTardeFila?.minutos_atraso != null && marcTardeFila.minutos_atraso <= 10,
+    `tipo=${marcTardeFila?.tipo} minutos_atraso=${marcTardeFila?.minutos_atraso}`);
+
+  // aplica_descuento=false: aunque llegó tarde, NO debe haberse creado un descuento.
+  const descuentosDeEstaMarca = await pool.query(
+    'SELECT id FROM descuento WHERE marcacion_id = $1', [marcTardeBody.id]
+  );
+  check('Área con aplica_descuento=false NO genera descuento pese al atraso',
+    descuentosDeEstaMarca.rows.length === 0);
+
+  // Cerrar la jornada que quedó abierta por la prueba (para no ensuciar futuras corridas)
+  if (marcTarde.status === 201) {
+    await pool.query(
+      `UPDATE turno_jornada SET estado = 'CERRADO', salida_marcada = TRUE
+       WHERE id = (SELECT turno_jornada_id FROM marcacion WHERE id = $1)`,
+      [marcTardeBody.id]
+    );
+  }
+
+  // Con empleados asignados el área no se puede eliminar
+  const delBloqueado = await fetch(`${BASE}/turnos/${areaBody.id}`, { method: 'DELETE', headers: auth });
+  check('DELETE área con empleados asignados → 409', delBloqueado.status === 409);
+
+  // Desasignar y eliminar las 2 áreas de prueba
+  await actualizarEmpleado({ areaTurnoId: null });
+  const delOk = await fetch(`${BASE}/turnos/${areaBody.id}`, { method: 'DELETE', headers: auth });
+  check('DELETE área sin asignados → 204', delOk.status === 204);
+  await fetch(`${BASE}/turnos/${areaSimpleBody.id}`, { method: 'DELETE', headers: auth });
+
+  // ── Planilla quincenal ──
+  const plan = await fetch(`${BASE}/descuentos/planilla?fechaInicio=2026-06-28&fechaFin=2026-07-13`, { headers: auth });
+  const planBody = await plan.json();
+  const matematicaOk = planBody.filas.every(f => f.total_bs === f.ganado_bs - f.descuentos_bs
+    && f.ganado_bs === f.dias_trabajados * planBody.pagoDiaBs);
+  check('GET /descuentos/planilla → 200 y total = ganado − descuentos', plan.status === 200 && matematicaOk,
+    `${planBody.filas.length} empleados, pago/día ${planBody.pagoDiaBs} Bs`);
+
+  // ── Visitas de supervisor ──
+  const { otp: otpVisita } = await TOTP.generate(suc.totp_secret, { digits: 6, period: 30 });
+  const visitaNoSup = await fetch(`${BASE}/visitas`, {
+    method: 'POST',
+    headers: { 'x-device-token': disp.device_token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sucursalId: suc.id, qrToken: otpVisita }),
+  });
+  check('POST /visitas sin ser supervisor → 403', visitaNoSup.status === 403);
+
+  await pool.query('UPDATE empleado SET es_supervisor = TRUE WHERE id = $1', [disp.empleado_id]);
+  const visitaOk = await fetch(`${BASE}/visitas`, {
+    method: 'POST',
+    headers: { 'x-device-token': disp.device_token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sucursalId: suc.id, qrToken: otpVisita, gpsLat: -17.78, gpsLng: -63.18 }),
+  });
+  const visitaBody = await visitaOk.json();
+  check('POST /visitas como supervisor → 201', visitaOk.status === 201, visitaBody.sucursal);
+
+  const hoyLocal = new Date(Date.now() - 4 * 3600 * 1000).toISOString().slice(0, 10);
+  const resumenVisitas = await fetch(`${BASE}/visitas/resumen?fechaInicio=${hoyLocal}&fechaFin=${hoyLocal}`, { headers: auth });
+  const resumenBody = await resumenVisitas.json();
+  check('GET /visitas/resumen incluye la visita', resumenVisitas.status === 200
+    && resumenBody.some(r => r.empleado_id === disp.empleado_id && r.visitas >= 1));
+
+  // Cleanup visitas de prueba
+  await pool.query('DELETE FROM visita_supervisor WHERE id = $1', [visitaBody.id]);
+  await pool.query('UPDATE empleado SET es_supervisor = FALSE WHERE id = $1', [disp.empleado_id]);
+
   console.log(fallos === 0 ? '\nTodo OK ✔' : `\n${fallos} verificaciones fallaron ✘`);
   await pool.end();
   process.exit(fallos === 0 ? 0 : 1);

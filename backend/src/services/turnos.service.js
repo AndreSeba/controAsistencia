@@ -17,18 +17,29 @@ function minutosDeHora(horaValue) {
   return h * 60 + m;
 }
 
-function validarFormato(horaInicio, horaFin) {
-  if (!HORA_REGEX.test(horaInicio) || !HORA_REGEX.test(horaFin)) {
-    throw new TurnoError('horaInicio y horaFin deben tener formato HH:MM (24hs)');
+function validarBloques(bloques) {
+  if (!Array.isArray(bloques) || bloques.length === 0) {
+    throw new TurnoError('Se requiere al menos un bloque horario');
   }
-  // Invariante del catálogo: ningún turno cruza medianoche (ver CLAUDE.md).
-  if (minutosDeHora(horaFin) <= minutosDeHora(horaInicio)) {
-    throw new TurnoError('horaFin debe ser posterior a horaInicio (ningún turno cruza medianoche)');
-  }
-}
 
-function seSuperponen(aInicio, aFin, bInicio, bFin) {
-  return minutosDeHora(aInicio) < minutosDeHora(bFin) && minutosDeHora(bInicio) < minutosDeHora(aFin);
+  for (let i = 0; i < bloques.length; i++) {
+    const b = bloques[i];
+    if (!HORA_REGEX.test(b.horaInicio) || !HORA_REGEX.test(b.horaFin)) {
+      throw new TurnoError(`Bloque ${i + 1}: horaInicio y horaFin deben tener formato HH:MM (24hs)`);
+    }
+    if (minutosDeHora(b.horaFin) <= minutosDeHora(b.horaInicio)) {
+      throw new TurnoError(`Bloque ${i + 1}: horaFin debe ser posterior a horaInicio (ningún bloque cruza medianoche)`);
+    }
+  }
+
+  // Verificar orden cronológico y que no se solapen.
+  for (let i = 1; i < bloques.length; i++) {
+    const finAnterior = minutosDeHora(bloques[i - 1].horaFin);
+    const inicioActual = minutosDeHora(bloques[i].horaInicio);
+    if (inicioActual <= finAnterior) {
+      throw new TurnoError(`Bloque ${i + 1} se solapa o no sigue al bloque ${i}. El inicio (${bloques[i].horaInicio}) debe ser posterior al fin del bloque anterior (${bloques[i - 1].horaFin}).`);
+    }
+  }
 }
 
 function formatoHHMM(minutos) {
@@ -38,8 +49,11 @@ function formatoHHMM(minutos) {
 function formatear(turno) {
   return {
     ...turno,
-    hora_inicio: formatoHHMM(minutosDeHora(turno.hora_inicio)),
-    hora_fin: formatoHHMM(minutosDeHora(turno.hora_fin)),
+    bloques: (turno.bloques || []).map((b) => ({
+      ...b,
+      hora_inicio: formatoHHMM(minutosDeHora(b.hora_inicio)),
+      hora_fin: formatoHHMM(minutosDeHora(b.hora_fin)),
+    })),
   };
 }
 
@@ -53,33 +67,72 @@ async function obtenerOFallar(id) {
   return formatear(turno);
 }
 
-async function actualizarHorario(id, { horaInicio, horaFin }, usuarioId, ip) {
+// Nota: se eliminó la restricción de no-superposición entre turnos. Con el modelo
+// de áreas (cada empleado tiene SU área con horario propio), dos áreas pueden
+// compartir horario total o parcialmente (Cocina 8-16, Reparto 9-17) sin ambigüedad:
+// el atraso se calcula contra el área del empleado, no contra el turno más cercano.
+async function actualizar(id, { bloques, aplicaDescuento }, usuarioId, ip) {
   const anterior = await obtenerOFallar(id);
-  validarFormato(horaInicio, horaFin);
+  validarBloques(bloques);
 
-  const otros = (await turnosRepo.listarCatalogo()).filter((t) => t.id !== id);
-  const choque = otros.find((t) => seSuperponen(horaInicio, horaFin, t.hora_inicio, t.hora_fin));
-  if (choque) {
-    const inicio = formatoHHMM(minutosDeHora(choque.hora_inicio));
-    const fin = formatoHHMM(minutosDeHora(choque.hora_fin));
-    throw new TurnoError(`Se superpone con el turno ${choque.nombre} (${inicio}-${fin})`);
-  }
-
-  await turnosRepo.actualizarHorario(id, { horaInicio, horaFin });
+  const descuentoFlag = aplicaDescuento !== false;
+  await turnosRepo.actualizar(id, { bloques, aplicaDescuento: descuentoFlag });
 
   await auditoriaRepo.registrar({
     usuarioId,
-    accion: 'actualizar_horario_turno',
+    accion: 'actualizar_area',
     tabla: 'turno_catalogo',
     registroId: id,
     ip,
     detalle: {
-      anterior: { horaInicio: anterior.hora_inicio, horaFin: anterior.hora_fin },
-      nuevo: { horaInicio, horaFin },
+      anterior: { bloques: anterior.bloques, aplica_descuento: anterior.aplica_descuento },
+      nuevo: { bloques, aplica_descuento: descuentoFlag },
     },
   });
 
   return obtenerOFallar(id);
 }
 
-module.exports = { listar, obtenerOFallar, actualizarHorario, TurnoError };
+async function crear({ nombre, bloques, aplicaDescuento }, usuarioId, ip) {
+  if (!nombre?.trim()) throw new TurnoError('nombre del área es requerido');
+  validarBloques(bloques);
+
+  const descuentoFlag = aplicaDescuento !== false;
+  const id = await turnosRepo.crearCatalogo({ nombre: nombre.trim(), bloques, aplicaDescuento: descuentoFlag });
+
+  await auditoriaRepo.registrar({
+    usuarioId,
+    accion: 'crear_area',
+    tabla: 'turno_catalogo',
+    registroId: id,
+    ip,
+    detalle: { nombre: nombre.trim(), bloques, aplica_descuento: descuentoFlag },
+  });
+
+  return obtenerOFallar(id);
+}
+
+async function desactivar(id, usuarioId, ip) {
+  const area = await obtenerOFallar(id);
+
+  const asignados = await turnosRepo.contarEmpleadosAsignados(id);
+  if (asignados > 0) {
+    throw new TurnoError(
+      `No se puede eliminar: hay ${asignados} empleado(s) activo(s) asignados a esta área. Reasignalos primero.`,
+      409
+    );
+  }
+
+  await turnosRepo.desactivarCatalogo(id);
+
+  await auditoriaRepo.registrar({
+    usuarioId,
+    accion: 'desactivar_area',
+    tabla: 'turno_catalogo',
+    registroId: id,
+    ip,
+    detalle: { nombre: area.nombre },
+  });
+}
+
+module.exports = { listar, obtenerOFallar, actualizar, crear, desactivar, TurnoError };

@@ -52,8 +52,13 @@ button {
   padding: 6px 12px;
   font-size: 14px;
   margin-right: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), background 150ms ease, color 150ms ease;
 }
+button svg { flex-shrink: 0; }
+.boton-icono { padding: 6px; }
 button:hover { background: var(--accent); color: #fff; }
 button:active:not(:disabled) { transform: scale(0.97); }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -215,6 +220,17 @@ input:focus-visible, select:focus-visible {
 
 .filtros { margin-bottom: 12px; }
 .filtro-dia { display: flex; align-items: center; gap: 4px; }
+.planilla-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.planilla-header h2 { margin: 0; }
+.campo-check input[type="checkbox"] { accent-color: var(--accent); }
+.badge-supervisor { color: var(--warning); font-size: 13px; }
 .filtro-dia input { flex: 1; }
 .btn-limpiar-dia {
   border: none;
@@ -377,6 +393,11 @@ input:focus-visible, select:focus-visible {
   margin-right: 0;
 }
 .modal-cerrar:hover { background: var(--accent-bg); color: var(--accent); }
+
+.confirm-mensaje { margin: 0 0 20px; line-height: 1.5; }
+.confirm-acciones { display: flex; gap: 8px; justify-content: flex-end; }
+.boton-peligro { color: var(--error); border-color: var(--error); background: transparent; }
+.boton-peligro:hover { background: var(--error); color: #fff; }
 
 .enlace-copiable { display: flex; align-items: center; gap: 6px; }
 .enlace-copiado { color: var(--text-muted); font-size: 13px; }
@@ -1089,4 +1110,84 @@ details[open] .tarifas-contenido {
     from { opacity: 0; }
     to   { opacity: 1; }
   }
+}
+
+/* ── Bloques horarios ── */
+.bloques-horario {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.bloque-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--accent-bg);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.campo-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.campo-inline input[type="time"] {
+  width: 120px;
+}
+
+.campo-discontinuo {
+  margin: 4px 0 10px;
+}
+
+/* ── Badges ── */
+.badge {
+  display: inline-block;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.badge-activo {
+  background: rgba(34, 197, 94, 0.12);
+  color: #16a34a;
+}
+
+.badge-inactivo {
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+}
+
+:root[data-tema="oscuro"] .badge-activo {
+  background: rgba(34, 197, 94, 0.18);
+  color: #4ade80;
+}
+
+:root[data-tema="oscuro"] .badge-inactivo {
+  background: rgba(220, 38, 38, 0.16);
+  color: #f87171;
+}
+
+/* ── Toggle checkbox ── */
+.campo-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  margin: 12px 0;
+}
+
+.campo-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
 }

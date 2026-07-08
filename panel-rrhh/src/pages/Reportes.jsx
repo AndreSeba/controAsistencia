@@ -4,6 +4,8 @@ import { usePaginacion } from '../hooks/usePaginacion';
 import Paginacion from '../components/Paginacion';
 import GraficoAsistencia from '../components/GraficoAsistencia';
 import AsistenciaPersonal from '../components/AsistenciaPersonal';
+import VisitasSupervisores from '../components/VisitasSupervisores';
+import { IconActualizar } from '../components/Icons';
 
 function Reportes() {
   const { request } = useAuth();
@@ -72,6 +74,13 @@ function Reportes() {
           onClick={() => setVista('asistencia')}
         >
           Asistencia
+        </button>
+        <button
+          type="button"
+          className={vista === 'visitas' ? 'active' : ''}
+          onClick={() => setVista('visitas')}
+        >
+          Visitas
         </button>
       </div>
 
@@ -224,12 +233,16 @@ function Reportes() {
             </div>
           )}
 
-          <button type="button" onClick={cargar}>Actualizar</button>
+          <button type="button" onClick={cargar}><IconActualizar /> Actualizar</button>
         </>
       )}
 
       {vista === 'asistencia' && (
         <AsistenciaPersonal empleados={empleados} />
+      )}
+
+      {vista === 'visitas' && (
+        <VisitasSupervisores />
       )}
     </div>
   );

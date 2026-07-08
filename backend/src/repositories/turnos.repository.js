@@ -3,36 +3,125 @@ const { getPool } = require('../config/db');
 async function listarCatalogo() {
   const pool = getPool();
   const result = await pool.query(`
-    SELECT id, nombre, hora_inicio, hora_fin FROM turno_catalogo ORDER BY hora_inicio
+    SELECT tc.id, tc.nombre, tc.activo, tc.aplica_descuento,
+           json_agg(
+             json_build_object(
+               'numero_bloque', tb.numero_bloque,
+               'hora_inicio', to_char(tb.hora_inicio, 'HH24:MI'),
+               'hora_fin', to_char(tb.hora_fin, 'HH24:MI')
+             ) ORDER BY tb.numero_bloque
+           ) AS bloques
+    FROM turno_catalogo tc
+    LEFT JOIN turno_bloque tb ON tb.turno_catalogo_id = tc.id
+    WHERE tc.activo = TRUE
+    GROUP BY tc.id, tc.nombre, tc.activo, tc.aplica_descuento
+    ORDER BY MIN(tb.hora_inicio)
   `);
-  return result.rows;
+  // Si un área no tiene bloques (no debería pasar), devolver array vacío en vez de [null].
+  return result.rows.map((r) => ({
+    ...r,
+    bloques: r.bloques?.[0] === null ? [] : r.bloques,
+  }));
 }
 
 async function obtenerCatalogoPorId(id, executor = getPool()) {
   const result = await executor.query(
-    'SELECT id, nombre, hora_inicio, hora_fin FROM turno_catalogo WHERE id = $1',
+    `SELECT tc.id, tc.nombre, tc.activo, tc.aplica_descuento,
+            json_agg(
+              json_build_object(
+                'numero_bloque', tb.numero_bloque,
+                'hora_inicio', to_char(tb.hora_inicio, 'HH24:MI'),
+                'hora_fin', to_char(tb.hora_fin, 'HH24:MI')
+              ) ORDER BY tb.numero_bloque
+            ) AS bloques
+     FROM turno_catalogo tc
+     LEFT JOIN turno_bloque tb ON tb.turno_catalogo_id = tc.id
+     WHERE tc.id = $1
+     GROUP BY tc.id, tc.nombre, tc.activo, tc.aplica_descuento`,
     [id]
   );
-  return result.rows[0] || null;
+  if (!result.rows[0]) return null;
+  const r = result.rows[0];
+  return { ...r, bloques: r.bloques?.[0] === null ? [] : r.bloques };
 }
 
-async function actualizarHorario(id, { horaInicio, horaFin }, executor = getPool()) {
-  await executor.query(
-    'UPDATE turno_catalogo SET hora_inicio = $1, hora_fin = $2 WHERE id = $3',
-    [horaInicio, horaFin, id]
+async function crearCatalogo({ nombre, bloques, aplicaDescuento }, executor = getPool()) {
+  // Insertar el área sin hora_inicio/hora_fin propias (se usan los del primer bloque
+  // como fallback para retrocompatibilidad de columnas legacy).
+  const primerBloque = bloques[0];
+  const result = await executor.query(
+    `INSERT INTO turno_catalogo (nombre, hora_inicio, hora_fin, aplica_descuento)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id`,
+    [nombre, primerBloque.horaInicio, primerBloque.horaFin, aplicaDescuento]
   );
+  const turnoId = result.rows[0].id;
+
+  for (let i = 0; i < bloques.length; i++) {
+    await executor.query(
+      `INSERT INTO turno_bloque (turno_catalogo_id, numero_bloque, hora_inicio, hora_fin)
+       VALUES ($1, $2, $3, $4)`,
+      [turnoId, i + 1, bloques[i].horaInicio, bloques[i].horaFin]
+    );
+  }
+
+  return turnoId;
+}
+
+// Borrado lógico: las jornadas históricas siguen referenciando el turno.
+async function desactivarCatalogo(id, executor = getPool()) {
+  await executor.query('UPDATE turno_catalogo SET activo = FALSE WHERE id = $1', [id]);
+}
+
+async function contarEmpleadosAsignados(id, executor = getPool()) {
+  const result = await executor.query(
+    "SELECT COUNT(*)::int AS n FROM empleado WHERE area_turno_id = $1 AND estado = 'activo'",
+    [id]
+  );
+  return result.rows[0].n;
+}
+
+async function actualizar(id, { bloques, aplicaDescuento }, executor = getPool()) {
+  // Actualizar flag de descuento y columnas legacy.
+  const primerBloque = bloques[0];
+  await executor.query(
+    'UPDATE turno_catalogo SET hora_inicio = $1, hora_fin = $2, aplica_descuento = $3 WHERE id = $4',
+    [primerBloque.horaInicio, primerBloque.horaFin, aplicaDescuento, id]
+  );
+
+  // Reemplazar bloques: DELETE + re-INSERT (más simple que hacer diffs).
+  await executor.query('DELETE FROM turno_bloque WHERE turno_catalogo_id = $1', [id]);
+
+  for (let i = 0; i < bloques.length; i++) {
+    await executor.query(
+      `INSERT INTO turno_bloque (turno_catalogo_id, numero_bloque, hora_inicio, hora_fin)
+       VALUES ($1, $2, $3, $4)`,
+      [id, i + 1, bloques[i].horaInicio, bloques[i].horaFin]
+    );
+  }
 }
 
 async function buscarAbiertaPorEmpleado(empleadoId, executor = getPool()) {
   const result = await executor.query(
     `SELECT j.id, j.empleado_id, j.sucursal_id, j.fecha, j.turno_catalogo_id, j.estado,
-            tc.hora_inicio, tc.hora_fin
+            tc.aplica_descuento,
+            json_agg(
+              json_build_object(
+                'numero_bloque', tb.numero_bloque,
+                'hora_inicio', to_char(tb.hora_inicio, 'HH24:MI'),
+                'hora_fin', to_char(tb.hora_fin, 'HH24:MI')
+              ) ORDER BY tb.numero_bloque
+            ) AS bloques
      FROM turno_jornada j
      JOIN turno_catalogo tc ON tc.id = j.turno_catalogo_id
-     WHERE j.empleado_id = $1 AND j.estado = 'ABIERTO'`,
+     LEFT JOIN turno_bloque tb ON tb.turno_catalogo_id = tc.id
+     WHERE j.empleado_id = $1 AND j.estado = 'ABIERTO'
+     GROUP BY j.id, j.empleado_id, j.sucursal_id, j.fecha, j.turno_catalogo_id, j.estado, tc.aplica_descuento`,
     [empleadoId]
   );
-  return result.rows[0] || null;
+  if (!result.rows[0]) return null;
+  const r = result.rows[0];
+  return { ...r, bloques: r.bloques?.[0] === null ? [] : r.bloques };
 }
 
 async function crear({ empleadoId, sucursalId, fecha, turnoCatalogoId }, executor = getPool()) {
@@ -56,7 +145,7 @@ async function cerrar(id, { salidaMarcada, cierreAutomatico, requiereRevision },
 }
 
 async function listarAbiertasVencidas() {
-  // ABIERTA cuya hora_fin (local Bolivia) ya pasó respecto a la hora UTC actual.
+  // ABIERTA cuya hora_fin del ÚLTIMO bloque (local Bolivia) ya pasó.
   // fecha + hora_fin da un TIMESTAMP naive en hora local; se le suma el offset
   // local->UTC (+4h) y se interpreta explícitamente como UTC para comparar contra
   // NOW() sin depender del timezone de la sesión.
@@ -65,8 +154,13 @@ async function listarAbiertasVencidas() {
     SELECT j.id
     FROM turno_jornada j
     JOIN turno_catalogo tc ON tc.id = j.turno_catalogo_id
+    JOIN LATERAL (
+      SELECT MAX(tb.hora_fin) AS hora_fin_max
+      FROM turno_bloque tb
+      WHERE tb.turno_catalogo_id = tc.id
+    ) ub ON TRUE
     WHERE j.estado = 'ABIERTO'
-      AND ((j.fecha + tc.hora_fin) + INTERVAL '4 hours') AT TIME ZONE 'UTC' < NOW()
+      AND ((j.fecha + ub.hora_fin_max) + INTERVAL '4 hours') AT TIME ZONE 'UTC' < NOW()
   `);
   return result.rows;
 }
@@ -90,8 +184,9 @@ async function resumenPorPeriodo(fechaInicio, fechaFin) {
             COUNT(j.id) FILTER (WHERE j.requiere_revision) AS requieren_revision
      FROM turno_catalogo tc
      LEFT JOIN turno_jornada j ON j.turno_catalogo_id = tc.id ${filtroFecha}
-     GROUP BY tc.id, tc.nombre, tc.hora_inicio
-     ORDER BY tc.hora_inicio`,
+     GROUP BY tc.id, tc.nombre, tc.activo
+     HAVING tc.activo = TRUE OR COUNT(j.id) > 0
+     ORDER BY tc.nombre`,
     params
   );
   return result.rows;
@@ -100,7 +195,10 @@ async function resumenPorPeriodo(fechaInicio, fechaFin) {
 module.exports = {
   listarCatalogo,
   obtenerCatalogoPorId,
-  actualizarHorario,
+  crearCatalogo,
+  desactivarCatalogo,
+  contarEmpleadosAsignados,
+  actualizar,
   buscarAbiertaPorEmpleado,
   crear,
   cerrar,

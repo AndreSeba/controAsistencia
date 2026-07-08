@@ -1,6 +1,7 @@
 const descuentosRepo = require('../repositories/descuentos.repository');
 const reglaDescuentoRepo = require('../repositories/reglaDescuento.repository');
 const auditoriaRepo = require('../repositories/auditoria.repository');
+const configuracionService = require('./configuracion.service');
 
 async function listarReglas() {
   return reglaDescuentoRepo.listar();
@@ -70,6 +71,34 @@ async function reportePorPeriodo({ periodo, fecha } = {}) {
   return descuentosRepo.reportePorPeriodo({ periodo, fecha });
 }
 
+// Planilla quincenal (28→13 / 14→27): cada día trabajado paga pago_dia_bs sin
+// importar puntualidad; total = ganado − descuentos del rango, sin bajar de 0
+// (un empleado nunca puede terminar "debiendo" a la empresa por descuentos).
+async function planillaQuincenal({ fechaInicio, fechaFin }) {
+  if (!fechaInicio || !fechaFin) throw new DescuentoError('fechaInicio y fechaFin son requeridos');
+  validarFecha(fechaInicio);
+  validarFecha(fechaFin);
+
+  const [filas, pagoDiaBs] = await Promise.all([
+    descuentosRepo.planillaPorRango(fechaInicio, fechaFin),
+    configuracionService.obtenerPagoDiaBs(),
+  ]);
+
+  return {
+    pagoDiaBs,
+    filas: filas.map((f) => {
+      const ganado = f.dias_trabajados * pagoDiaBs;
+      const descuentos = Number(f.descuentos_bs);
+      return {
+        ...f,
+        ganado_bs: ganado,
+        descuentos_bs: descuentos,
+        total_bs: Math.max(0, ganado - descuentos),
+      };
+    }),
+  };
+}
+
 async function avanzarEstado(id, usuarioId, ip) {
   const descuento = await descuentosRepo.obtenerPorId(id);
   if (!descuento) throw new DescuentoError('Descuento no encontrado', 404);
@@ -93,4 +122,4 @@ async function avanzarEstado(id, usuarioId, ip) {
   return descuentosRepo.obtenerPorId(id);
 }
 
-module.exports = { calcularParaEntrada, listar, reportePorPeriodo, avanzarEstado, listarReglas, actualizarRegla, DescuentoError };
+module.exports = { calcularParaEntrada, listar, reportePorPeriodo, planillaQuincenal, avanzarEstado, listarReglas, actualizarRegla, DescuentoError };

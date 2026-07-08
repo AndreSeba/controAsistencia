@@ -76,6 +76,38 @@ async function reportePorPeriodo({ periodo, fecha } = {}) {
   return result.rows;
 }
 
+// Planilla quincenal: días trabajados (jornadas con fecha en el rango, sin importar
+// puntualidad) y descuentos del mismo rango (por fecha local de la marcación).
+// El ganado (días × pago_dia_bs) y el total se calculan en el service.
+async function planillaPorRango(fechaInicio, fechaFin) {
+  const pool = getPool();
+  const result = await pool.query(
+    `WITH dias AS (
+       SELECT tj.empleado_id, COUNT(DISTINCT tj.fecha) AS dias_trabajados
+       FROM turno_jornada tj
+       WHERE tj.fecha BETWEEN $1 AND $2
+       GROUP BY tj.empleado_id
+     ),
+     dsc AS (
+       SELECT d.empleado_id, SUM(d.monto_bs) AS descuentos_bs
+       FROM descuento d
+       JOIN marcacion m ON m.id = d.marcacion_id
+       WHERE (m.timestamp_utc - INTERVAL '4 hours')::date BETWEEN $1 AND $2
+       GROUP BY d.empleado_id
+     )
+     SELECT e.id AS empleado_id, e.nombre, e.apellido, e.documento_nro,
+            COALESCE(di.dias_trabajados, 0)::int AS dias_trabajados,
+            COALESCE(dsc.descuentos_bs, 0) AS descuentos_bs
+     FROM empleado e
+     LEFT JOIN dias di ON di.empleado_id = e.id
+     LEFT JOIN dsc ON dsc.empleado_id = e.id
+     WHERE COALESCE(di.dias_trabajados, 0) > 0 OR COALESCE(dsc.descuentos_bs, 0) > 0
+     ORDER BY e.apellido, e.nombre`,
+    [fechaInicio, fechaFin]
+  );
+  return result.rows;
+}
+
 async function resumenPorSucursal(tsInicio, tsFin) {
   const pool = getPool();
   let where = "WHERE d.estado = 'aplicado'";
@@ -98,4 +130,4 @@ async function resumenPorSucursal(tsInicio, tsFin) {
   return result.rows;
 }
 
-module.exports = { crear, listar, obtenerPorId, actualizarEstado, reportePorPeriodo, resumenPorSucursal };
+module.exports = { crear, listar, obtenerPorId, actualizarEstado, reportePorPeriodo, planillaPorRango, resumenPorSucursal };
