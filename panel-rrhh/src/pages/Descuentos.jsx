@@ -308,15 +308,15 @@ function Descuentos() {
           <table className="tabla">
             <thead>
               <tr>
-                <th>Personal</th><th>Documento</th><th>Días trabajados</th>
+                <th>Personal</th><th>Sucursal</th><th>Días trabajados</th>
                 <th>Ganado Bs</th><th>Descuentos Bs</th><th>Total Bs</th>
               </tr>
             </thead>
             <tbody>
               {repPaginados.map((f) => (
-                <tr key={f.empleado_id}>
+                <tr key={`${f.empleado_id}-${f.sucursal_id}`}>
                   <td>{f.nombre} {f.apellido}</td>
-                  <td>{f.documento_nro}</td>
+                  <td>{f.sucursal_nombre}</td>
                   <td>{f.dias_trabajados}</td>
                   <td>{f.ganado_bs.toFixed(2)}</td>
                   <td>{f.descuentos_bs.toFixed(2)}</td>

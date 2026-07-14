@@ -21,6 +21,49 @@ function fechaHoraLocal(isoStr) {
   return `${d.toLocaleDateString('es-BO')} ${d.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
+function horaLocal(isoStr) {
+  if (!isoStr) return null;
+  return new Date(isoStr).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' });
+}
+
+// fechaLocal ya viene como texto 'YYYY-MM-DD' del backend (evita el corrimiento
+// de un día que da parsear un DATE de Postgres como Date de JS en el navegador).
+function fechaLocalCorta(fechaLocal) {
+  const [a, m, d] = fechaLocal.split('-');
+  return `${d}/${m}/${a}`;
+}
+
+function duracionTexto(min) {
+  if (min == null) return null;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return h > 0 ? `${h} h ${m} min` : `${m} min`;
+}
+
+function celdaHora(timestamp, dentroGeocerca, textoVacio) {
+  if (!timestamp) return textoVacio;
+  const nota = dentroGeocerca === false ? ' (fuera de geocerca)' : '';
+  return `${horaLocal(timestamp)}${nota}`;
+}
+
+// Agrupa los pares Entrada/Salida por día para mostrar la fecha una sola vez
+// por grupo en vez de repetirla en cada fila.
+function agruparPorFecha(pares) {
+  const mapa = new Map();
+  for (const p of pares) {
+    if (!mapa.has(p.fecha_local)) mapa.set(p.fecha_local, []);
+    mapa.get(p.fecha_local).push(p);
+  }
+  return Array.from(mapa.entries())
+    .map(([fecha_local, filas]) => ({
+      fecha_local,
+      filas: [...filas].sort((a, b) =>
+        new Date(a.entrada_timestamp || a.salida_timestamp) - new Date(b.entrada_timestamp || b.salida_timestamp)
+      ),
+    }))
+    .sort((a, b) => b.fecha_local.localeCompare(a.fecha_local));
+}
+
 function VisitasSupervisores() {
   const { request } = useAuth();
   const [{ anio, mes }, setPeriodo] = useState(mesHoy);
@@ -33,7 +76,8 @@ function VisitasSupervisores() {
   const esMesActual = anio === hoy.getFullYear() && mes === hoy.getMonth() + 1;
 
   const { datosPaginados: resPag, paginaActiva: pagR, totalPaginas: totR, irPaginaAnterior: antR, irPaginaSiguiente: sigR, setPagina: setPagR } = usePaginacion(resumen, 10);
-  const { datosPaginados: detPag, paginaActiva: pagD, totalPaginas: totD, irPaginaAnterior: antD, irPaginaSiguiente: sigD, setPagina: setPagD } = usePaginacion(detalle, 10);
+  const gruposDetalle = agruparPorFecha(detalle);
+  const { datosPaginados: grupPag, paginaActiva: pagD, totalPaginas: totD, irPaginaAnterior: antD, irPaginaSiguiente: sigD, setPagina: setPagD } = usePaginacion(gruposDetalle, 10);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- recarga al cambiar mes
   useEffect(() => {
@@ -98,21 +142,27 @@ function VisitasSupervisores() {
       {detalle.length > 0 && (
         <div className="card">
           <h2>Detalle de visitas</h2>
-          <table className="tabla">
-            <thead>
-              <tr><th>Supervisor</th><th>Sucursal</th><th>Fecha y hora</th><th>En la sucursal</th></tr>
-            </thead>
-            <tbody>
-              {detPag.map((v) => (
-                <tr key={v.id}>
-                  <td>{v.nombre} {v.apellido}</td>
-                  <td>{v.sucursal_nombre}</td>
-                  <td>{fechaHoraLocal(v.timestamp_utc)}</td>
-                  <td>{v.dentro_geocerca == null ? 'Sin GPS' : v.dentro_geocerca ? 'Sí' : 'Fuera de geocerca'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {grupPag.map((g) => (
+            <div key={g.fecha_local} className="grupo-fecha">
+              <h3 className="grupo-fecha-titulo">{fechaLocalCorta(g.fecha_local)}</h3>
+              <table className="tabla">
+                <thead>
+                  <tr><th>Supervisor</th><th>Sucursal</th><th>Entrada</th><th>Salida</th><th>Duración</th></tr>
+                </thead>
+                <tbody>
+                  {g.filas.map((p) => (
+                    <tr key={`${p.empleado_id}-${p.sucursal_id}-${p.entrada_timestamp ?? p.salida_timestamp}`}>
+                      <td>{p.nombre} {p.apellido}</td>
+                      <td>{p.sucursal_nombre}</td>
+                      <td>{celdaHora(p.entrada_timestamp, p.entrada_dentro_geocerca, '—')}</td>
+                      <td>{celdaHora(p.salida_timestamp, p.salida_dentro_geocerca, 'Sin marcar')}</td>
+                      <td>{duracionTexto(p.duracion_min) ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
           <Paginacion paginaActiva={pagD} totalPaginas={totD} irPaginaAnterior={antD} irPaginaSiguiente={sigD} />
         </div>
       )}

@@ -151,7 +151,7 @@ function Marcar({ deviceToken }) {
           gpsLng: ubicacion.lng,
         },
       });
-      setResultado({ estado: 'visita_ok', sucursal: visita.sucursal });
+      setResultado({ estado: 'visita_ok', sucursal: visita.sucursal, tipo: visita.tipo });
       setPaso('resultado');
     } catch (err) {
       const mensaje = err instanceof ApiError ? err.message : 'No se pudo registrar la visita. Probá de nuevo.';
@@ -328,7 +328,7 @@ function Marcar({ deviceToken }) {
         <div className="pantalla-centrada">
           <div className="tarjeta resultado">
             <p className="icono-resultado">Listo</p>
-            <h1>Visita registrada</h1>
+            <h1>{resultado.tipo === 'ENTRADA' ? 'Entrada registrada' : 'Salida registrada'}</h1>
             <p className="ayuda">{resultado.sucursal}</p>
             <button type="button" onClick={reintentar}><IconVolver /> Volver</button>
           </div>

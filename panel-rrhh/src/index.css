@@ -474,6 +474,16 @@ input:focus-visible, select:focus-visible {
 }
 .lista-simple li:last-child { border-bottom: none; }
 
+/* ── Detalle de visitas agrupado por fecha ── */
+.grupo-fecha { margin-bottom: 20px; }
+.grupo-fecha:last-child { margin-bottom: 0; }
+.grupo-fecha-titulo {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
 /* ── Ranking ── */
 .ranking-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
 

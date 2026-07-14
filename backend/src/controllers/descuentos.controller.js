@@ -71,7 +71,7 @@ async function exportarPlanilla(req, res, next) {
     const buffer = await exportExcelService.generarBuffer(`Planilla ${fechaInicio} a ${fechaFin}`, [
       { header: 'Empleado', key: 'nombre', width: 20 },
       { header: 'Apellido', key: 'apellido', width: 20 },
-      { header: 'Documento', key: 'documento_nro', width: 16 },
+      { header: 'Sucursal', key: 'sucursal_nombre', width: 20 },
       { header: 'Días trabajados', key: 'dias_trabajados', width: 16 },
       { header: `Ganado Bs (${pagoDiaBs}/día)`, key: 'ganado_bs', width: 18 },
       { header: 'Descuentos Bs', key: 'descuentos_bs', width: 16 },

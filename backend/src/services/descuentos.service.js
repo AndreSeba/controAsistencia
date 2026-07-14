@@ -72,8 +72,8 @@ async function reportePorPeriodo({ periodo, fecha } = {}) {
 }
 
 // Planilla quincenal (28→13 / 14→27): cada día trabajado paga pago_dia_bs sin
-// importar puntualidad; total = ganado − descuentos del rango, sin bajar de 0
-// (un empleado nunca puede terminar "debiendo" a la empresa por descuentos).
+// importar puntualidad; total = ganado − descuentos del rango. Puede quedar
+// negativo (decisión del cliente 2026-07-11, revierte el piso en 0 anterior).
 async function planillaQuincenal({ fechaInicio, fechaFin }) {
   if (!fechaInicio || !fechaFin) throw new DescuentoError('fechaInicio y fechaFin son requeridos');
   validarFecha(fechaInicio);
@@ -93,7 +93,7 @@ async function planillaQuincenal({ fechaInicio, fechaFin }) {
         ...f,
         ganado_bs: ganado,
         descuentos_bs: descuentos,
-        total_bs: Math.max(0, ganado - descuentos),
+        total_bs: ganado - descuentos,
       };
     }),
   };
