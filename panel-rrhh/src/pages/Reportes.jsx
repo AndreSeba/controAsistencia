@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
 import { usePaginacion } from '../hooks/usePaginacion';
 import Paginacion from '../components/Paginacion';
@@ -7,14 +8,49 @@ import AsistenciaPersonal from '../components/AsistenciaPersonal';
 import VisitasSupervisores from '../components/VisitasSupervisores';
 import { IconActualizar } from '../components/Icons';
 
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+function periodoActual() {
+  const hoy = new Date();
+  return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+}
+
 function Reportes() {
   const { request } = useAuth();
+  const navigate = useNavigate();
   const [vista, setVista] = useState('dashboard');
   const [resumen, setResumen] = useState(null);
   const [ranking, setRanking] = useState(null);
   const [empleados, setEmpleados] = useState([]);
   const [error, setError] = useState(null);
-  const [periodo, setPeriodo] = useState('hoy');
+  const [periodo, setPeriodo] = useState(periodoActual());
+  const [fechaDia, setFechaDia] = useState(''); // '' = todo el mes; con valor filtra ese día
+
+  const [anio, mes] = periodo.split('-').map(Number);
+  const hoy = periodoActual();
+  const esMesActual = periodo === hoy;
+
+  function navMes(delta) {
+    let nm = mes + delta, na = anio;
+    if (nm > 12) { nm = 1; na++; }
+    if (nm < 1)  { nm = 12; na--; }
+    setPeriodo(`${na}-${String(nm).padStart(2, '0')}`);
+    setFechaDia('');
+  }
+
+  // El filtro que manda: día exacto si está elegido, si no el mes.
+  const filtroFechaQuery = fechaDia ? `fecha=${fechaDia}` : `periodo=${periodo}`;
+
+  function irARevision() {
+    navigate('/marcaciones?estado=requiere_revision');
+  }
+
+  function manejarTeclaRevision(e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      irARevision();
+    }
+  }
 
   const { datosPaginados: sucPuntualesPag, paginaActiva: pagSP, totalPaginas: totalSP, irPaginaSiguiente: sigSP, irPaginaAnterior: antSP, setPagina: setPagSP } = usePaginacion(ranking?.sucursalesMasPuntuales || [], 10);
   const { datosPaginados: sucAtrasosPag, paginaActiva: pagSA, totalPaginas: totalSA, irPaginaSiguiente: sigSA, irPaginaAnterior: antSA, setPagina: setPagSA } = usePaginacion(ranking?.sucursalesMasAtrasos || [], 10);
@@ -25,8 +61,8 @@ function Reportes() {
     setError(null);
     try {
       const [resResumen, resRanking] = await Promise.all([
-        request(`/dashboard/resumen?periodo=${periodo}`),
-        request(`/dashboard/ranking?periodo=${periodo}`)
+        request(`/dashboard/resumen?${filtroFechaQuery}`),
+        request(`/dashboard/ranking?${filtroFechaQuery}`)
       ]);
       setResumen(resResumen);
       setRanking(resRanking);
@@ -41,22 +77,29 @@ function Reportes() {
   }, []);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { cargar(); }, [periodo]);
+  useEffect(() => { cargar(); }, [periodo, fechaDia]);
 
   return (
     <div className="page">
       <div className="page-header">
         <h1>Reportes</h1>
         {vista === 'dashboard' && (
-          <label className="filtro-inline">
-            <span>Período</span>
-            <select value={periodo} onChange={(e) => setPeriodo(e.target.value)}>
-              <option value="hoy">Hoy</option>
-              <option value="semana">Esta semana</option>
-              <option value="mes">Este mes</option>
-              <option value="historico">Todo el historial</option>
-            </select>
-          </label>
+          <div className="filtros filtros-fila">
+            <div className="mes-nav">
+              <button type="button" onClick={() => navMes(-1)}>◀</button>
+              <span className="mes-label">{MESES[mes - 1]} {anio}</span>
+              <button type="button" onClick={() => navMes(1)} disabled={esMesActual}>▶</button>
+            </div>
+            <label>
+              Día
+              <span className="filtro-dia">
+                <input type="date" value={fechaDia} onChange={(e) => setFechaDia(e.target.value)} />
+                {fechaDia && (
+                  <button type="button" className="btn-limpiar-dia" onClick={() => setFechaDia('')} title="Ver todo el mes">✕</button>
+                )}
+              </span>
+            </label>
+          </div>
         )}
       </div>
 
@@ -95,7 +138,14 @@ function Reportes() {
                   <p className="kpi-label">Entradas</p>
                   <p className="kpi-valor">{resumen.totalEntradas}</p>
                 </div>
-                <div className="card kpi-card">
+                <div
+                  className="card kpi-card kpi-card-clicable"
+                  onClick={irARevision}
+                  onKeyDown={manejarTeclaRevision}
+                  role="button"
+                  tabIndex={0}
+                  title="Ver marcaciones que requieren revisión"
+                >
                   <p className="kpi-label">Requieren revisión</p>
                   <p className={`kpi-valor${resumen.totalRequierenRevision > 0 ? ' kpi-alerta' : ''}`}>
                     {resumen.totalRequierenRevision}
@@ -116,7 +166,16 @@ function Reportes() {
                     <p><strong>{t.entradas}</strong> entradas · <strong>{t.salidas}</strong> salidas</p>
                     <p><strong>{t.abiertas}</strong> jornadas abiertas</p>
                     {t.requierenRevision > 0 && (
-                      <p className="error"><strong>{t.requierenRevision}</strong> requieren revisión</p>
+                      <p
+                        className="error texto-clicable"
+                        onClick={irARevision}
+                        onKeyDown={manejarTeclaRevision}
+                        role="button"
+                        tabIndex={0}
+                        title="Ver marcaciones que requieren revisión"
+                      >
+                        <strong>{t.requierenRevision}</strong> requieren revisión
+                      </p>
                     )}
                   </div>
                 ))}

@@ -451,6 +451,18 @@ input:focus-visible, select:focus-visible {
 .kpi-valor.kpi-alerta { color: var(--error); }
 .kpi-valor.kpi-rojo { color: var(--error); }
 .kpi-unidad { font-size: 1rem; font-weight: 400; color: var(--text-muted); }
+.kpi-card-clicable {
+  cursor: pointer;
+  transition: border-color 150ms, box-shadow 150ms;
+}
+.kpi-card-clicable:hover,
+.kpi-card-clicable:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.kpi-card-clicable:focus-visible { outline: none; }
+.texto-clicable { cursor: pointer; width: fit-content; }
+.texto-clicable:hover, .texto-clicable:focus-visible { text-decoration: underline; }
 
 /* ── Sections ── */
 .seccion { margin-top: 8px; }

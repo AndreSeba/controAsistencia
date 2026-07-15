@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
 import { descargarBlob } from '../lib/api';
 import { usePaginacion } from '../hooks/usePaginacion';
@@ -7,10 +8,12 @@ import { IconGuardar, IconDescargar } from '../components/Icons';
 
 function Marcaciones() {
   const { request } = useAuth();
+  const [searchParams] = useSearchParams();
   const [marcaciones, setMarcaciones] = useState([]);
   const [sucursales, setSucursales] = useState([]);
   const [error, setError] = useState(null);
-  const [filtroEstado, setFiltroEstado] = useState('');
+  // Llega precargado desde el link "Requieren revisión" del Dashboard (?estado=requiere_revision).
+  const [filtroEstado, setFiltroEstado] = useState(searchParams.get('estado') || '');
   const [filtroTipo, setFiltroTipo] = useState('');
   const [filtroSucursal, setFiltroSucursal] = useState('');
   const [busqueda, setBusqueda] = useState('');

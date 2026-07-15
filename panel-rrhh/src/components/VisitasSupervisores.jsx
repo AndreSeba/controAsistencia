@@ -67,6 +67,7 @@ function agruparPorFecha(pares) {
 function VisitasSupervisores() {
   const { request } = useAuth();
   const [{ anio, mes }, setPeriodo] = useState(mesHoy);
+  const [fechaDia, setFechaDia] = useState(''); // '' = todo el mes; con valor filtra ese día
   const [resumen, setResumen] = useState([]);
   const [detalle, setDetalle] = useState([]);
   const [error, setError] = useState(null);
@@ -79,9 +80,11 @@ function VisitasSupervisores() {
   const gruposDetalle = agruparPorFecha(detalle);
   const { datosPaginados: grupPag, paginaActiva: pagD, totalPaginas: totD, irPaginaAnterior: antD, irPaginaSiguiente: sigD, setPagina: setPagD } = usePaginacion(gruposDetalle, 10);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- recarga al cambiar mes
+  // El filtro que manda: día exacto si está elegido, si no el mes.
+  const { inicio, fin } = fechaDia ? { inicio: fechaDia, fin: fechaDia } : rangoMes(anio, mes);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- recarga al cambiar mes o día
   useEffect(() => {
-    const { inicio, fin } = rangoMes(anio, mes);
     setCargando(true);
     setError(null);
     Promise.all([
@@ -91,7 +94,7 @@ function VisitasSupervisores() {
       .then(([res, det]) => { setResumen(res); setDetalle(det); setPagR(1); setPagD(1); })
       .catch((err) => setError(err.message))
       .finally(() => setCargando(false));
-  }, [anio, mes]);
+  }, [anio, mes, fechaDia]);
 
   function navMes(delta) {
     setPeriodo(({ anio: a, mes: m }) => {
@@ -100,6 +103,7 @@ function VisitasSupervisores() {
       if (nm < 1)  { nm = 12; na--; }
       return { anio: na, mes: nm };
     });
+    setFechaDia('');
   }
 
   return (
@@ -110,6 +114,15 @@ function VisitasSupervisores() {
           <span className="mes-label">{MESES[mes - 1]} {anio}</span>
           <button type="button" onClick={() => navMes(1)} disabled={esMesActual}>▶</button>
         </div>
+        <label>
+          Día
+          <span className="filtro-dia">
+            <input type="date" value={fechaDia} onChange={(e) => setFechaDia(e.target.value)} />
+            {fechaDia && (
+              <button type="button" className="btn-limpiar-dia" onClick={() => setFechaDia('')} title="Ver todo el mes">✕</button>
+            )}
+          </span>
+        </label>
       </div>
 
       {error && <p className="error">{error}</p>}

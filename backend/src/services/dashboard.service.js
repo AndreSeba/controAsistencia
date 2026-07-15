@@ -3,34 +3,41 @@ const marcacionesRepo = require('../repositories/marcaciones.repository');
 const descuentosRepo = require('../repositories/descuentos.repository');
 const horarioUtil = require('../utils/horario.util');
 
-function calcularFechas(periodo) {
-  const ahora = new Date();
-  const hoyStr = horarioUtil.fechaLocal(ahora); // YYYY-MM-DD
-  
-  if (periodo === 'hoy') {
-    return { fechaInicio: hoyStr, fechaFin: hoyStr };
+const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
+const PERIODO_RE = /^\d{4}-\d{2}$/;
+
+class DashboardError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
   }
-  
-  if (periodo === 'semana') {
-    // Get local Monday
-    const local = new Date(ahora.getTime() - 4 * 60 * 60 * 1000);
-    const day = local.getUTCDay() || 7; 
-    if (day !== 1) local.setUTCDate(local.getUTCDate() - (day - 1));
-    const lunesStr = local.toISOString().slice(0, 10);
-    return { fechaInicio: lunesStr, fechaFin: hoyStr };
-  }
-  
-  if (periodo === 'mes') {
-    const mesStr = hoyStr.slice(0, 8) + '01'; // YYYY-MM-01
-    return { fechaInicio: mesStr, fechaFin: hoyStr };
-  }
-  
-  // 'historico' o default
-  return { fechaInicio: null, fechaFin: null };
 }
 
-async function resumen(periodo = 'hoy') {
-  const { fechaInicio, fechaFin } = calcularFechas(periodo);
+// Mismo contrato de filtro que Descuentos/Marcaciones: 'fecha' (YYYY-MM-DD) filtra un día
+// exacto, 'periodo' (YYYY-MM) filtra el mes completo. 'fecha' manda si ambos vienen. Sin
+// ninguno de los dos, cae al día de hoy (comportamiento histórico del dashboard).
+function calcularFechas({ periodo, fecha } = {}) {
+  if (fecha) {
+    if (!FECHA_RE.test(fecha)) throw new DashboardError('fecha debe tener formato YYYY-MM-DD');
+    return { fechaInicio: fecha, fechaFin: fecha };
+  }
+
+  if (periodo) {
+    if (periodo === 'historico') return { fechaInicio: null, fechaFin: null };
+    if (!PERIODO_RE.test(periodo)) throw new DashboardError('periodo debe tener formato YYYY-MM');
+    const [anio, mes] = periodo.split('-').map(Number);
+    const fechaInicio = `${periodo}-01`;
+    const ultimoDia = new Date(Date.UTC(anio, mes, 0)).getUTCDate();
+    const fechaFin = `${periodo}-${String(ultimoDia).padStart(2, '0')}`;
+    return { fechaInicio, fechaFin };
+  }
+
+  const hoyStr = horarioUtil.fechaLocal(new Date());
+  return { fechaInicio: hoyStr, fechaFin: hoyStr };
+}
+
+async function resumen(filtro) {
+  const { fechaInicio, fechaFin } = calcularFechas(filtro);
   const filas = await turnosRepo.resumenPorPeriodo(fechaInicio, fechaFin);
 
   const turnos = filas.map((f) => ({
@@ -58,7 +65,6 @@ async function resumen(periodo = 'hoy') {
   const totalDescuentosGenerales = descuentosPorSucursal.reduce((acc, d) => acc + d.totalBs, 0);
 
   return {
-    periodo,
     rango: fechaInicio && fechaFin ? (fechaInicio === fechaFin ? fechaInicio : `${fechaInicio} a ${fechaFin}`) : 'Histórico',
     turnos,
     totalEntradas: turnos.reduce((acc, t) => acc + t.entradas, 0),
@@ -68,8 +74,8 @@ async function resumen(periodo = 'hoy') {
   };
 }
 
-async function ranking(periodo = 'hoy') {
-  const { fechaInicio, fechaFin } = calcularFechas(periodo);
+async function ranking(filtro) {
+  const { fechaInicio, fechaFin } = calcularFechas(filtro);
   
   // format dates to timestamps for marcaciones query if provided
   let tsInicio = null;

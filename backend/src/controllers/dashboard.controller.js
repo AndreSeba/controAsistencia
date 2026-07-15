@@ -2,7 +2,8 @@ const dashboardService = require('../services/dashboard.service');
 
 async function resumen(req, res, next) {
   try {
-    res.json(await dashboardService.resumen(req.query.periodo));
+    const { periodo, fecha } = req.query;
+    res.json(await dashboardService.resumen({ periodo, fecha }));
   } catch (err) {
     next(err);
   }
@@ -10,7 +11,8 @@ async function resumen(req, res, next) {
 
 async function ranking(req, res, next) {
   try {
-    res.json(await dashboardService.ranking(req.query.periodo));
+    const { periodo, fecha } = req.query;
+    res.json(await dashboardService.ranking({ periodo, fecha }));
   } catch (err) {
     next(err);
   }
