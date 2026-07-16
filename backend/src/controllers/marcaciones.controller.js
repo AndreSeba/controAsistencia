@@ -28,6 +28,8 @@ async function registrar(req, res, next) {
       empleadoId: req.dispositivo.empleadoId,
       sucursalId: Number(sucursalId),
       deviceToken: req.dispositivo.deviceToken,
+      dispositivoCompartido: req.dispositivo.compartido === true,
+      dispositivoSucursalId: req.dispositivo.sucursalId,
       qrToken,
       livenessNonce,
       selfieBuffer: req.file.buffer,

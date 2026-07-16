@@ -98,6 +98,7 @@ textarea {
 }
 
 .botones-tipo { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+.botones-quien-sos { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; max-height: 60svh; overflow-y: auto; }
 .botones-tipo button:nth-child(1) { background: #2dbe6c; }
 .botones-tipo button:nth-child(2) { background: #e0673e; }
 .botones-tipo .boton-visita {

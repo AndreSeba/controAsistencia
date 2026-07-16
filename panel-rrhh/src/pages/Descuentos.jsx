@@ -146,10 +146,13 @@ function TarifasAtraso({ request }) {
           {ok && <span className="tarifa-ok">✓ Guardado</span>}
           <button
             type="button"
+            className="boton-icono"
+            title={guardando ? 'Guardando…' : `Guardar${sucias.length > 0 ? ` (${sucias.length} cambio${sucias.length > 1 ? 's' : ''})` : ''}`}
+            aria-label="Guardar"
             onClick={guardar}
             disabled={guardando || sucias.length === 0}
           >
-            <IconGuardar /> {guardando ? 'Guardando…' : `Guardar${sucias.length > 0 ? ` (${sucias.length} cambio${sucias.length > 1 ? 's' : ''})` : ''}`}
+            <IconGuardar />
           </button>
         </div>
       </div>

@@ -15,6 +15,7 @@ const configuracionRoutes = require('./routes/configuracion.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
 const novedadRoutes = require('./routes/novedad.routes');
 const visitasRoutes = require('./routes/visitas.routes');
+const dispositivosCorporativosRoutes = require('./routes/dispositivosCorporativos.routes');
 
 const app = express();
 
@@ -64,6 +65,7 @@ app.use('/api/configuracion', configuracionRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/novedades', novedadRoutes);
 app.use('/api/visitas', visitasRoutes);
+app.use('/api/dispositivos-corporativos', dispositivosCorporativosRoutes);
 
 app.use((err, req, res, _next) => {
   console.error(err);

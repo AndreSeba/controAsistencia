@@ -9,7 +9,7 @@ function ConfirmDialog({ abierto, titulo = 'Confirmar acción', mensaje, onConfi
       <p className="confirm-mensaje">{mensaje}</p>
       <div className="confirm-acciones">
         <button type="button" className="boton-peligro" onClick={onConfirmar}><IconEliminar /> Confirmar</button>
-        <button type="button" onClick={onCancelar}><IconCancelar /> Cancelar</button>
+        <button type="button" className="boton-icono" title="Cancelar" aria-label="Cancelar" onClick={onCancelar}><IconCancelar /></button>
       </div>
     </Modal>
   );

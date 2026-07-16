@@ -1,5 +1,6 @@
 const empleadosService = require('../services/empleados.service');
 const dispositivosService = require('../services/dispositivos.service');
+const dispositivosCorpService = require('../services/dispositivosCorporativos.service');
 const biometriaService = require('../services/biometria.service');
 
 async function listar(req, res, next) {
@@ -39,12 +40,27 @@ async function actualizar(req, res, next) {
   }
 }
 
-// Perfil mínimo del empleado dueño del device token (PWA): decide si mostrar
-// el botón de "Registrar visita" (solo supervisores).
+// Perfil mínimo del dueño del device token (PWA): decide si mostrar el botón de
+// "Registrar visita" (solo supervisores) y, para un celular corporativo compartido,
+// devuelve la lista de empleados habilitados en vez de un único perfil — la PWA la usa
+// para la pantalla "¿Quién sos?" antes de dejar elegir Entrada/Salida.
 async function yo(req, res, next) {
   try {
-    const emp = await empleadosService.obtenerOFallar(req.dispositivo.empleadoId);
-    res.json({ id: emp.id, nombre: emp.nombre, apellido: emp.apellido, esSupervisor: emp.es_supervisor === true });
+    if (req.dispositivoInfo.compartido) {
+      const empleados = await dispositivosCorpService.listarEmpleadosHabilitados(req.dispositivoInfo.dispositivoCorporativoId);
+      return res.json({
+        compartido: true,
+        empleados: empleados.map(e => ({
+          id: e.empleado_id,
+          nombre: e.nombre,
+          apellido: e.apellido,
+          esSupervisor: e.es_supervisor === true,
+          fotoReferenciaUrl: e.foto_referencia_url,
+        })),
+      });
+    }
+    const emp = await empleadosService.obtenerOFallar(req.dispositivoInfo.empleadoId);
+    res.json({ compartido: false, id: emp.id, nombre: emp.nombre, apellido: emp.apellido, esSupervisor: emp.es_supervisor === true });
   } catch (err) {
     next(err);
   }

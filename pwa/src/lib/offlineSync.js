@@ -44,7 +44,10 @@ export async function sincronizarPendientes(deviceToken) {
         formData.append('gpsLng', marcacion.gpsLng);
         formData.append('gpsPrecisionM', marcacion.gpsPrecisionM);
       }
-      
+      if (marcacion.empleadoId != null) {
+        formData.append('empleadoId', marcacion.empleadoId);
+      }
+
       await request('/marcaciones', {
         method: 'POST',
         deviceToken,

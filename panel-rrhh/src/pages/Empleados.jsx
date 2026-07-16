@@ -239,6 +239,7 @@ function Empleados() {
       )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', gap: '16px' }}>
+        <button type="button" className="boton-nuevo boton-icono" title="Agregar personal" aria-label="Agregar personal" onClick={abrirCrear}><IconCrear /></button>
         <input
           type="search"
           placeholder="Buscar por nombre o CI..."
@@ -249,7 +250,6 @@ function Empleados() {
           }}
           style={{ padding: '8px', width: '300px', borderRadius: '4px', border: '1px solid #ccc' }}
         />
-        <button type="button" className="boton-nuevo" onClick={abrirCrear}><IconCrear /> Agregar personal</button>
       </div>
 
       <input
@@ -360,10 +360,16 @@ function Empleados() {
               <span className="ayuda">Cara de frente, buena luz. Si no la subís ahora, podés enrolarla después desde la fila.</span>
             </label>
           )}
-          <button type="submit" disabled={guardando}>
-            {empleadoEditando ? <IconGuardar /> : <IconCrear />} {guardando ? 'Guardando…' : (empleadoEditando ? 'Guardar Cambios' : 'Crear')}
+          <button
+            type="submit"
+            className="boton-icono"
+            title={empleadoEditando ? 'Guardar cambios' : 'Crear'}
+            aria-label={empleadoEditando ? 'Guardar cambios' : 'Crear'}
+            disabled={guardando}
+          >
+            {empleadoEditando ? <IconGuardar /> : <IconCrear />}
           </button>
-          <button type="button" onClick={() => setModalAbierto(false)} disabled={guardando}><IconCancelar /> Cancelar</button>
+          <button type="button" className="boton-icono" title="Cancelar" aria-label="Cancelar" onClick={() => setModalAbierto(false)} disabled={guardando}><IconCancelar /></button>
         </form>
       </Modal>
 

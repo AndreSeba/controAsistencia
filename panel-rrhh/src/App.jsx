@@ -8,6 +8,7 @@ import Empleados from './pages/Empleados';
 import Marcaciones from './pages/Marcaciones';
 import Descuentos from './pages/Descuentos';
 import Turnos from './pages/Turnos';
+import DispositivosCorporativos from './pages/DispositivosCorporativos';
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
         <Route path="/marcaciones" element={<Marcaciones />} />
         <Route path="/descuentos" element={<Descuentos />} />
         <Route path="/turnos" element={<Turnos />} />
+        <Route path="/dispositivos-corporativos" element={<DispositivosCorporativos />} />
       </Route>
       <Route path="*" element={<Navigate to="/reportes" replace />} />
     </Routes>

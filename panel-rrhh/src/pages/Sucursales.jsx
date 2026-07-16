@@ -17,6 +17,7 @@ function Sucursales() {
   const [nuevaNombre, setNuevaNombre] = useState('');
   const [nuevaGeocerca, setNuevaGeocerca] = useState(GEOCERCA_VACIA);
   const [editandoId, setEditandoId] = useState(null);
+  const [nombreEdit, setNombreEdit] = useState('');
   const [geocercaEdit, setGeocercaEdit] = useState(GEOCERCA_VACIA);
   const [idCopiado, setIdCopiado] = useState(null);
   const [guardando, setGuardando] = useState(false);
@@ -89,6 +90,7 @@ function Sucursales() {
 
   function abrirEdicionGeocerca(sucursal) {
     setEditandoId(sucursal.id);
+    setNombreEdit(sucursal.nombre);
     setGeocercaEdit({
       geoLat: Number(sucursal.geo_lat),
       geoLng: Number(sucursal.geo_lng),
@@ -102,8 +104,18 @@ function Sucursales() {
     if (geocercaRef.current) return;
     geocercaRef.current = true;
     setError(null);
+    if (!nombreEdit.trim()) {
+      setError('El nombre es requerido');
+      geocercaRef.current = false;
+      return;
+    }
     setGuardando(true);
     try {
+      const actual = sucursales.find((s) => s.id === editandoId);
+      await request(`/sucursales/${editandoId}`, {
+        method: 'PUT',
+        body: { nombre: nombreEdit, activo: actual?.activo ?? true },
+      });
       await request(`/sucursales/${editandoId}/geocerca`, {
         method: 'PUT',
         body: {
@@ -139,7 +151,7 @@ function Sucursales() {
       <p className="subtitulo">Marcá en el mapa dónde está cada sucursal y qué tan amplia es la zona donde se permite marcar asistencia.</p>
       {error && <p className="error">{error}</p>}
 
-      <button type="button" className="boton-nuevo" onClick={abrirCrear}><IconCrear /> Nueva sucursal</button>
+      <button type="button" className="boton-nuevo boton-icono" title="Nueva sucursal" aria-label="Nueva sucursal" onClick={abrirCrear}><IconCrear /></button>
 
       <table className="tabla">
         <thead>
@@ -155,14 +167,20 @@ function Sucursales() {
               <td>{s.activo ? 'Activa' : 'Inactiva'}</td>
               <td>
                 <span className="enlace-copiable">
-                  <button type="button" onClick={() => copiarEnlace(s)}><IconCopiar /> Copiar enlace</button>
+                  <button type="button" className="boton-icono" title="Copiar enlace" aria-label="Copiar enlace" onClick={() => copiarEnlace(s)}><IconCopiar /></button>
                   {idCopiado === s.id && <span className="enlace-copiado">Copiado ✓</span>}
                 </span>
               </td>
               <td>
-                <button type="button" onClick={() => abrirEdicionGeocerca(s)}><IconEditar /> Mover ubicación</button>
-                <button type="button" onClick={() => alternarActivo(s)}>
-                  {s.activo ? <IconEliminar /> : <IconGuardar />} {s.activo ? 'Desactivar' : 'Activar'}
+                <button type="button" className="boton-icono" title="Editar sucursal" aria-label="Editar sucursal" onClick={() => abrirEdicionGeocerca(s)}><IconEditar /></button>
+                <button
+                  type="button"
+                  className="boton-icono"
+                  title={s.activo ? 'Desactivar' : 'Activar'}
+                  aria-label={s.activo ? 'Desactivar' : 'Activar'}
+                  onClick={() => alternarActivo(s)}
+                >
+                  {s.activo ? <IconEliminar /> : <IconGuardar />}
                 </button>
               </td>
             </tr>
@@ -202,16 +220,21 @@ function Sucursales() {
             />
           </label>
 
-          <button type="submit" disabled={guardando}><IconGuardar /> {guardando ? 'Guardando…' : 'Guardar sucursal'}</button>
+          <button type="submit" className="boton-icono" title="Guardar sucursal" aria-label="Guardar sucursal" disabled={guardando}><IconGuardar /></button>
         </form>
       </Modal>
 
       <Modal
         abierto={modalAbierto === 'editar'}
-        titulo={`Editar ubicación — ${sucursales.find((s) => s.id === editandoId)?.nombre ?? ''}`}
+        titulo={`Editar sucursal — ${sucursales.find((s) => s.id === editandoId)?.nombre ?? ''}`}
         onCerrar={() => setModalAbierto(null)}
       >
         <form onSubmit={guardarGeocerca}>
+          <label className="campo">
+            Nombre de la sucursal
+            <input value={nombreEdit} onChange={(e) => setNombreEdit(e.target.value)} required />
+          </label>
+
           <SelectorUbicacion
             lat={geocercaEdit.geoLat}
             lng={geocercaEdit.geoLng}
@@ -229,8 +252,8 @@ function Sucursales() {
               onChange={(e) => setGeocercaEdit((g) => ({ ...g, geoRadioM: Number(e.target.value) }))}
             />
           </label>
-          <button type="submit" disabled={guardando}><IconGuardar /> {guardando ? 'Guardando…' : 'Guardar cambios'}</button>
-          <button type="button" onClick={() => setModalAbierto(null)}><IconCancelar /> Cancelar</button>
+          <button type="submit" className="boton-icono" title="Guardar cambios" aria-label="Guardar cambios" disabled={guardando}><IconGuardar /></button>
+          <button type="button" className="boton-icono" title="Cancelar" aria-label="Cancelar" onClick={() => setModalAbierto(null)}><IconCancelar /></button>
         </form>
       </Modal>
     </div>

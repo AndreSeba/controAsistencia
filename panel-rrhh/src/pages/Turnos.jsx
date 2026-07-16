@@ -214,15 +214,14 @@ function Turnos() {
 
   return (
     <div className="page">
-      <div className="page-header">
-        <h1>Áreas y horarios</h1>
-        <button type="button" className="boton-nuevo" onClick={abrirNueva}><IconCrear /> Nueva área</button>
-      </div>
+      <h1>Áreas y horarios</h1>
       <p className="subtitulo">
         Cada área tiene su propio horario (con uno o más bloques). Al personal se le asigna un área al registrarlo,
         y su atraso se calcula contra el horario del bloque correspondiente.
       </p>
       {error && <p className="error">{error}</p>}
+
+      <button type="button" className="boton-nuevo boton-icono" title="Nueva área" aria-label="Nueva área" onClick={abrirNueva}><IconCrear /></button>
 
       <table className="tabla">
         <thead>
@@ -269,8 +268,8 @@ function Turnos() {
             />
             Aplica descuento por atraso
           </label>
-          <button type="submit" disabled={guardando}><IconGuardar /> {guardando ? 'Guardando…' : 'Guardar'}</button>
-          <button type="button" onClick={() => setEditandoId(null)} disabled={guardando}><IconCancelar /> Cancelar</button>
+          <button type="submit" className="boton-icono" title="Guardar" aria-label="Guardar" disabled={guardando}><IconGuardar /></button>
+          <button type="button" className="boton-icono" title="Cancelar" aria-label="Cancelar" onClick={() => setEditandoId(null)} disabled={guardando}><IconCancelar /></button>
         </form>
       </Modal>
 
@@ -298,8 +297,8 @@ function Turnos() {
             />
             Aplica descuento por atraso
           </label>
-          <button type="submit" disabled={guardando}><IconCrear /> {guardando ? 'Creando…' : 'Crear'}</button>
-          <button type="button" onClick={() => setModalNueva(false)} disabled={guardando}><IconCancelar /> Cancelar</button>
+          <button type="submit" className="boton-icono" title="Crear" aria-label="Crear" disabled={guardando}><IconCrear /></button>
+          <button type="button" className="boton-icono" title="Cancelar" aria-label="Cancelar" onClick={() => setModalNueva(false)} disabled={guardando}><IconCancelar /></button>
         </form>
       </Modal>
 
@@ -332,7 +331,7 @@ function Turnos() {
               required
             />
           </label>
-          <button type="submit" disabled={guardandoConfig}><IconGuardar /> {guardandoConfig ? 'Guardando…' : 'Guardar'}</button>
+          <button type="submit" className="boton-icono" title={guardandoConfig ? 'Guardando…' : 'Guardar'} aria-label="Guardar" disabled={guardandoConfig}><IconGuardar /></button>
           {configGuardada && <span className="ayuda">Guardado.</span>}
         </form>
       </div>

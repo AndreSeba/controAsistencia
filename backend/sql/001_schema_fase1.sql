@@ -218,7 +218,16 @@ INSERT INTO roles (nombre, descripcion) VALUES
     ('rrhh_admin', 'Único rol administrativo: enrolamiento, geocerca, revisión, descuentos')
 ON CONFLICT (nombre) DO NOTHING;
 
-INSERT INTO turno_catalogo (nombre, hora_inicio, hora_fin) VALUES
-    ('MAÑANA', '11:00', '15:00'),
-    ('TARDE', '15:00', '23:00')
-ON CONFLICT (nombre) DO NOTHING;
+-- No usar ON CONFLICT (nombre): desde 015_nombre_area_unico_activo.sql el UNIQUE plano
+-- de nombre fue reemplazado por un índice parcial (solo activo = TRUE), y ON CONFLICT
+-- exige un arbiter que matchee exactamente — con el índice parcial ya no hay ninguno
+-- para la columna sola, así que esta migración fallaba entera al re-correrse sobre una
+-- base ya migrada ("no unique or exclusion constraint matching the ON CONFLICT
+-- specification"). NOT EXISTS es idempotente sin depender de qué constraint exista.
+INSERT INTO turno_catalogo (nombre, hora_inicio, hora_fin)
+SELECT v.nombre, v.hora_inicio, v.hora_fin
+FROM (VALUES
+    ('MAÑANA', TIME '11:00', TIME '15:00'),
+    ('TARDE', TIME '15:00', TIME '23:00')
+) AS v(nombre, hora_inicio, hora_fin)
+WHERE NOT EXISTS (SELECT 1 FROM turno_catalogo t WHERE t.nombre = v.nombre);

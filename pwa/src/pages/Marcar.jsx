@@ -4,7 +4,7 @@ import { useCamara } from '../lib/useCamara';
 import { request, ApiError } from '../lib/api';
 import { obtenerUbicacion } from '../lib/geolocalizacion';
 import { guardarMarcacionOffline, sincronizarPendientes } from '../lib/offlineSync';
-import { IconEntrada, IconSalida, IconVisita, IconVolver } from '../components/Icons';
+import { IconEntrada, IconSalida, IconVisita, IconVolver, IconPersonas } from '../components/Icons';
 
 const SEGUNDOS_PARA_CAPTURAR = 3;
 
@@ -88,6 +88,28 @@ function PasoSelfie({ onCapturada }) {
   );
 }
 
+// Celular corporativo compartido: el token no resuelve a un único empleado, así que
+// antes de Entrada/Salida hay que preguntar quién es la persona que tiene el teléfono
+// en la mano. Se pregunta CADA VEZ (no se recuerda entre marcaciones): el celular pasa
+// de mano en mano durante el día.
+function PasoQuienSos({ empleados, onElegir }) {
+  return (
+    <div className="pantalla-centrada">
+      <div className="tarjeta">
+        <h1><IconPersonas /> ¿Quién sos?</h1>
+        <p className="ayuda">Este es un celular compartido. Elegí tu nombre para continuar.</p>
+        <div className="botones-quien-sos">
+          {empleados.map((emp) => (
+            <button type="button" key={emp.id} onClick={() => onElegir(emp)}>
+              {emp.nombre} {emp.apellido}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // El supervisor no marca su propia asistencia (no cobra por día trabajado vía este
 // sistema) — solo ve el botón de visita. El resto del personal ve Entrada/Salida.
 function PasoElegirTipo({ onElegir, esSupervisor, onVisita }) {
@@ -111,21 +133,42 @@ function PasoElegirTipo({ onElegir, esSupervisor, onVisita }) {
 }
 
 function Marcar({ deviceToken }) {
-  const [paso, setPaso] = useState('elegirTipo');
+  const [paso, setPaso] = useState('cargandoPerfil');
   const [tipoElegido, setTipoElegido] = useState(null);
   const [qrDetectado, setQrDetectado] = useState(null);
   const [reto, setReto] = useState(null);
   const [resultado, setResultado] = useState(null);
   const [error, setError] = useState(null);
   const [esSupervisor, setEsSupervisor] = useState(false);
+  const [compartido, setCompartido] = useState(false);
+  const [empleadosDisponibles, setEmpleadosDisponibles] = useState([]);
+  const [empleadoId, setEmpleadoId] = useState(null); // solo se usa (y se manda al backend) en un dispositivo compartido
 
-  // Saber si el dueño del dispositivo es supervisor (muestra el botón de visitas).
-  // Si falla (offline, etc.) simplemente no se muestra el botón — no bloquea marcar.
+  // Saber si el token es de un dispositivo personal (empleado ya identificado por el
+  // device_token, como siempre) o de un celular corporativo compartido (varios
+  // empleados habilitados) — en ese caso hay que preguntar "¿Quién sos?" antes de
+  // dejar elegir Entrada/Salida. Si falla (offline, etc.) se sigue como personal sin
+  // bloquear, igual que antes.
   useEffect(() => {
     request('/empleados/yo', { deviceToken })
-      .then((yo) => setEsSupervisor(yo.esSupervisor === true))
-      .catch(() => {});
+      .then((yo) => {
+        if (yo.compartido) {
+          setCompartido(true);
+          setEmpleadosDisponibles(yo.empleados);
+          setPaso('quienSos');
+        } else {
+          setEsSupervisor(yo.esSupervisor === true);
+          setPaso('elegirTipo');
+        }
+      })
+      .catch(() => setPaso('elegirTipo'));
   }, [deviceToken]);
+
+  function manejarQuienSos(empleado) {
+    setEmpleadoId(empleado.id);
+    setEsSupervisor(empleado.esSupervisor === true);
+    setPaso('elegirTipo');
+  }
 
   function manejarTipoElegido(tipo) {
     setTipoElegido(tipo);
@@ -149,6 +192,7 @@ function Marcar({ deviceToken }) {
           qrToken: datos.token,
           gpsLat: ubicacion.lat,
           gpsLng: ubicacion.lng,
+          ...(compartido && { empleadoId }),
         },
       });
       setResultado({ estado: 'visita_ok', sucursal: visita.sucursal, tipo: visita.tipo });
@@ -181,7 +225,11 @@ function Marcar({ deviceToken }) {
     setQrDetectado(datos);
     setError(null);
     try {
-      const nuevoReto = await request('/marcaciones/reto-liveness', { method: 'POST', deviceToken });
+      const nuevoReto = await request('/marcaciones/reto-liveness', {
+        method: 'POST',
+        deviceToken,
+        body: compartido ? { empleadoId } : undefined,
+      });
       setReto(nuevoReto);
       setPaso('reto');
     } catch (err) {
@@ -220,7 +268,8 @@ function Marcar({ deviceToken }) {
         tipo: tipoElegido,
         gpsLat: ubicacion.lat,
         gpsLng: ubicacion.lng,
-        gpsPrecisionM: ubicacion.precisionM
+        gpsPrecisionM: ubicacion.precisionM,
+        ...(compartido && { empleadoId }),
       };
 
       if (!navigator.onLine || reto.nonce.startsWith('offline-')) {
@@ -241,7 +290,10 @@ function Marcar({ deviceToken }) {
         formData.append('gpsLng', payload.gpsLng);
         formData.append('gpsPrecisionM', payload.gpsPrecisionM);
       }
-      
+      if (compartido) {
+        formData.append('empleadoId', empleadoId);
+      }
+
       const marcacion = await request('/marcaciones', {
         method: 'POST',
         deviceToken,
@@ -259,7 +311,8 @@ function Marcar({ deviceToken }) {
             sucursalId: qrDetectado.sucursalId,
             qrToken: qrDetectado.token,
             livenessNonce: reto.nonce,
-            tipo: tipoElegido
+            tipo: tipoElegido,
+            ...(compartido && { empleadoId }),
           });
           setResultado({ estado: 'registrada_offline', tipo: tipoElegido });
           setPaso('resultado');
@@ -281,7 +334,22 @@ function Marcar({ deviceToken }) {
     setQrDetectado(null);
     setReto(null);
     setResultado(null);
-    setPaso('elegirTipo');
+    // En un dispositivo compartido se vuelve a preguntar quién es: el celular pasa de
+    // mano en mano, no hay que asumir que sigue siendo la misma persona.
+    if (compartido) {
+      setEmpleadoId(null);
+      setPaso('quienSos');
+    } else {
+      setPaso('elegirTipo');
+    }
+  }
+
+  if (paso === 'cargandoPerfil') {
+    return null;
+  }
+
+  if (paso === 'quienSos') {
+    return <PasoQuienSos empleados={empleadosDisponibles} onElegir={manejarQuienSos} />;
   }
 
   if (paso === 'elegirTipo') {

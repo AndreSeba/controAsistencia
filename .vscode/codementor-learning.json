@@ -1,0 +1,16 @@
+{
+  "ASYNC-001": {
+    "occurrences": 5,
+    "confidence": 1,
+    "mastered_explicitly": false,
+    "first_seen": "2026-07-16T00:01:03.398Z",
+    "last_seen": "2026-07-16T00:01:28.400Z"
+  },
+  "CC-004": {
+    "occurrences": 1,
+    "confidence": 1,
+    "mastered_explicitly": false,
+    "first_seen": "2026-07-16T00:01:14.825Z",
+    "last_seen": "2026-07-16T00:01:14.825Z"
+  }
+}

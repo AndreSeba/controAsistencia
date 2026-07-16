@@ -55,6 +55,8 @@ async function registrar({
   empleadoId,
   sucursalId,
   deviceToken,
+  dispositivoCompartido,
+  dispositivoSucursalId,
   qrToken,
   livenessNonce,
   selfieBuffer,
@@ -67,6 +69,13 @@ async function registrar({
   timestampOffline,
 }) {
   if (!selfieBuffer?.length) throw new MarcacionError('selfie es requerida');
+
+  // Bloqueo DURO de sucursal para el celular corporativo compartido: a diferencia del
+  // GPS del empleado (señal blanda), este teléfono no se mueve de su sucursal asignada
+  // — si el QR escaneado es de otra, se rechaza en vez de mandarlo a revisión.
+  if (dispositivoCompartido && dispositivoSucursalId !== sucursalId) {
+    throw new MarcacionError('Este dispositivo corporativo está asignado a otra sucursal', 403);
+  }
 
   const sucursal = await sucursalesService.obtenerOFallar(sucursalId);
   const timestampUtc = offlineMode && timestampOffline ? new Date(timestampOffline) : new Date();
