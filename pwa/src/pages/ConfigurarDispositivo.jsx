@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 import { guardarDeviceToken } from '../lib/dispositivoStore';
+import { request } from '../lib/api';
 import { IconGuardar } from '../components/Icons';
 
-function ConfigurarDispositivo({ onConfigurado }) {
+function ConfigurarDispositivo({ onConfigurado, errorInicial }) {
   const [token, setToken] = useState('');
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(errorInicial || null);
   const [guardando, setGuardando] = useState(false);
   const guardandoRef = useRef(false);
 
@@ -16,10 +17,16 @@ function ConfigurarDispositivo({ onConfigurado }) {
     setError(null);
     setGuardando(true);
     try {
-      await guardarDeviceToken(limpio);
-      onConfigurado(limpio);
-    } catch {
-      setError('No se pudo guardar el código en este dispositivo. Probá de nuevo.');
+      // El código pegado es de un solo uso (mismo canje que el link automático):
+      // el backend lo cambia por el device_token real, que recién ahí se guarda.
+      const { deviceToken } = await request('/empleados/activar-dispositivo', {
+        method: 'POST',
+        body: { activacionToken: limpio },
+      });
+      await guardarDeviceToken(deviceToken);
+      onConfigurado(deviceToken);
+    } catch (err) {
+      setError(err.message || 'No se pudo activar este teléfono con ese código.');
     } finally {
       guardandoRef.current = false;
       setGuardando(false);

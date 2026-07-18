@@ -20,8 +20,11 @@ function Empleados() {
   const [nuevaArea, setNuevaArea] = useState('');
   const [nuevoTelefono, setNuevoTelefono] = useState('');
   const [nuevoEsSupervisor, setNuevoEsSupervisor] = useState(false);
+  const [nuevaFechaIngreso, setNuevaFechaIngreso] = useState('');
+  const [nuevaFechaRetiro, setNuevaFechaRetiro] = useState('');
   const [tokenEmitido, setTokenEmitido] = useState(null);
   const [idCopiado, setIdCopiado] = useState(null);
+  const [enlaceManual, setEnlaceManual] = useState(null); // { empleadoId, url } — fallback si el navegador bloquea el portapapeles
   const fotoInputRef = useRef(null);
   const [empleadoBiometriaId, setEmpleadoBiometriaId] = useState(null);
   const [busqueda, setBusqueda] = useState('');
@@ -82,6 +85,8 @@ function Empleados() {
     setNuevaArea('');
     setNuevoTelefono('');
     setNuevoEsSupervisor(false);
+    setNuevaFechaIngreso('');
+    setNuevaFechaRetiro('');
     limpiarFotoNueva();
     setErrorModal(null);
     setModalAbierto(true);
@@ -96,6 +101,8 @@ function Empleados() {
     setNuevaArea(emp.area_turno_id != null ? String(emp.area_turno_id) : '');
     setNuevoTelefono(emp.telefono ?? '');
     setNuevoEsSupervisor(emp.es_supervisor === true);
+    setNuevaFechaIngreso(emp.fecha_ingreso ? emp.fecha_ingreso.slice(0, 10) : '');
+    setNuevaFechaRetiro(emp.fecha_retiro ? emp.fecha_retiro.slice(0, 10) : '');
     limpiarFotoNueva();
     setErrorModal(null);
     setModalAbierto(true);
@@ -127,6 +134,8 @@ function Empleados() {
         areaTurnoId: nuevaArea || null,
         telefono: nuevoTelefono,
         esSupervisor: nuevoEsSupervisor,
+        fechaIngreso: nuevaFechaIngreso || null,
+        fechaRetiro: nuevaFechaRetiro || null,
       };
       if (empleadoEditando) {
         await request(`/empleados/${empleadoEditando.id}`, { method: 'PUT', body: datos });
@@ -170,7 +179,7 @@ function Empleados() {
     setTokenEmitido(null);
     try {
       const resultado = await request(`/empleados/${empleadoId}/dispositivo`, { method: 'POST' });
-      setTokenEmitido({ empleadoId, token: resultado.deviceToken });
+      setTokenEmitido({ empleadoId, token: resultado.activacionToken });
       cargar();
     } catch (err) {
       setError(err.message);
@@ -179,11 +188,20 @@ function Empleados() {
 
   async function copiarEnlace(empleadoId) {
     setError(null);
+    setEnlaceManual(null);
     try {
-      const { deviceToken } = await request(`/empleados/${empleadoId}/dispositivo/enlace`);
-      await navigator.clipboard.writeText(urlActivacion(deviceToken));
-      setIdCopiado(empleadoId);
-      setTimeout(() => setIdCopiado(null), 2000);
+      const { activacionToken } = await request(`/empleados/${empleadoId}/dispositivo/enlace`);
+      const url = urlActivacion(activacionToken);
+      try {
+        await navigator.clipboard.writeText(url);
+        setIdCopiado(empleadoId);
+        setTimeout(() => setIdCopiado(null), 2000);
+      } catch {
+        // El navegador puede rechazar la copia automática (pestaña sin foco, contexto
+        // no seguro, permiso denegado) — en vez de fallar en silencio, mostramos el
+        // enlace para copiarlo a mano.
+        setEnlaceManual({ empleadoId, url });
+      }
     } catch (err) {
       setError(err.message);
     }
@@ -233,8 +251,14 @@ function Empleados() {
       {error && <p className="error">{error}</p>}
       {tokenEmitido && (
         <p className="aviso">
-          Device token para el personal #{tokenEmitido.empleadoId} (transmitir por canal seguro, no se
-          volverá a mostrar): <code>{tokenEmitido.token}</code>
+          Código de activación para el personal #{tokenEmitido.empleadoId} (de un solo uso — una vez que
+          el empleado lo use queda inválido; si hace falta otro, usá "Copiar enlace"): <code>{tokenEmitido.token}</code>
+        </p>
+      )}
+      {enlaceManual && (
+        <p className="aviso">
+          No se pudo copiar automáticamente. Enlace para el personal #{enlaceManual.empleadoId}
+          (seleccioná y copiá a mano): <code>{enlaceManual.url}</code>
         </p>
       )}
 
@@ -333,6 +357,16 @@ function Empleados() {
           <label className="campo">
             Teléfono
             <input type="tel" placeholder="Ej: 70012345" value={nuevoTelefono} onChange={(e) => setNuevoTelefono(e.target.value)} />
+          </label>
+          <label className="campo">
+            Fecha de ingreso
+            <input type="date" value={nuevaFechaIngreso} onChange={(e) => setNuevaFechaIngreso(e.target.value)} />
+            <span className="ayuda">Antigüedad para el futuro módulo de Vacaciones. Si no la sabés, se puede completar después.</span>
+          </label>
+          <label className="campo">
+            Fecha de retiro
+            <input type="date" value={nuevaFechaRetiro} onChange={(e) => setNuevaFechaRetiro(e.target.value)} />
+            <span className="ayuda">Solo si el personal ya dejó de trabajar. Dejar vacío mientras esté activo.</span>
           </label>
           <label className="campo campo-check">
             <span>

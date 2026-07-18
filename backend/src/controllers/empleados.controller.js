@@ -22,8 +22,10 @@ async function obtener(req, res, next) {
 
 async function crear(req, res, next) {
   try {
-    const { nombre, apellido, documentoNro, hrmsRef, areaTurnoId, telefono, esSupervisor } = req.body;
-    res.status(201).json(await empleadosService.crear({ nombre, apellido, documentoNro, hrmsRef, areaTurnoId, telefono, esSupervisor }));
+    const { nombre, apellido, documentoNro, hrmsRef, areaTurnoId, telefono, esSupervisor, fechaIngreso, fechaRetiro } = req.body;
+    res.status(201).json(await empleadosService.crear({
+      nombre, apellido, documentoNro, hrmsRef, areaTurnoId, telefono, esSupervisor, fechaIngreso, fechaRetiro
+    }));
   } catch (err) {
     next(err);
   }
@@ -31,9 +33,9 @@ async function crear(req, res, next) {
 
 async function actualizar(req, res, next) {
   try {
-    const { nombre, apellido, documentoNro, estado, hrmsRef, areaTurnoId, telefono, esSupervisor } = req.body;
+    const { nombre, apellido, documentoNro, estado, hrmsRef, areaTurnoId, telefono, esSupervisor, fechaIngreso, fechaRetiro } = req.body;
     res.json(await empleadosService.actualizar(Number(req.params.id), {
-      nombre, apellido, documentoNro, estado, hrmsRef, areaTurnoId, telefono, esSupervisor
+      nombre, apellido, documentoNro, estado, hrmsRef, areaTurnoId, telefono, esSupervisor, fechaIngreso, fechaRetiro
     }));
   } catch (err) {
     next(err);
@@ -97,6 +99,18 @@ async function revocarDispositivo(req, res, next) {
   }
 }
 
+// PWA: canjea el código de activación de un solo uso por el device_token real. Sin
+// JWT ni device_token todavía — es el paso previo a tener cualquiera de los dos.
+async function activarDispositivo(req, res, next) {
+  try {
+    const { activacionToken } = req.body;
+    if (!activacionToken) return res.status(400).json({ error: 'activacionToken es requerido' });
+    res.json(await dispositivosService.activarPorToken(activacionToken));
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function enrolarBiometria(req, res, next) {
   try {
     if (!req.file) return res.status(400).json({ error: 'foto es requerida (multipart, campo "foto")' });
@@ -122,5 +136,6 @@ module.exports = {
   enrolarDispositivo,
   obtenerEnlaceDispositivo,
   revocarDispositivo,
+  activarDispositivo,
   enrolarBiometria,
 };

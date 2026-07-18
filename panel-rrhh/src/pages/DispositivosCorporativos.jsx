@@ -27,6 +27,7 @@ function DispositivosCorporativos() {
   const [sucursalReasignar, setSucursalReasignar] = useState('');
   const [tokenEmitido, setTokenEmitido] = useState(null);
   const [idCopiado, setIdCopiado] = useState(null);
+  const [enlaceManual, setEnlaceManual] = useState(null); // { id, url } — fallback si el navegador bloquea el portapapeles
   const [guardando, setGuardando] = useState(false);
   const guardandoRef = useRef(false);
 
@@ -85,11 +86,20 @@ function DispositivosCorporativos() {
 
   async function copiarEnlace(dispositivo) {
     setError(null);
+    setEnlaceManual(null);
     try {
       const { deviceToken } = await request(`/dispositivos-corporativos/${dispositivo.id}/enlace`);
-      await navigator.clipboard.writeText(urlActivacion(deviceToken));
-      setIdCopiado(dispositivo.id);
-      setTimeout(() => setIdCopiado(null), 2000);
+      const url = urlActivacion(deviceToken);
+      try {
+        await navigator.clipboard.writeText(url);
+        setIdCopiado(dispositivo.id);
+        setTimeout(() => setIdCopiado(null), 2000);
+      } catch {
+        // El navegador puede rechazar la copia automática (pestaña sin foco, contexto
+        // no seguro, permiso denegado) — en vez de fallar en silencio, mostramos el
+        // enlace para copiarlo a mano.
+        setEnlaceManual({ id: dispositivo.id, url });
+      }
     } catch (err) {
       setError(err.message);
     }
@@ -197,6 +207,11 @@ function DispositivosCorporativos() {
         <p className="aviso">
           Código de activación (transmitir por canal seguro, no se volverá a mostrar):{' '}
           <code>{tokenEmitido}</code>
+        </p>
+      )}
+      {enlaceManual && (
+        <p className="aviso">
+          No se pudo copiar automáticamente. Enlace (seleccioná y copiá a mano): <code>{enlaceManual.url}</code>
         </p>
       )}
 

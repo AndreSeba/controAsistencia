@@ -14,6 +14,10 @@ const router = express.Router();
 // endpoint que la PWA usa para decidir si mostrar la pantalla "¿Quién sos?".
 router.get('/yo', identificarDispositivo, empleadosController.yo);
 
+// PWA: canjea el código de activación de un solo uso por el device_token real.
+// Mismo criterio que /yo — sin JWT, todavía no hay ninguna credencial que exigir.
+router.post('/activar-dispositivo', empleadosController.activarDispositivo);
+
 router.use(verificarAccessToken);
 
 router.get('/', requierePermiso('empleados', 'puede_ver'), empleadosController.listar);

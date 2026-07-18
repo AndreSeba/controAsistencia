@@ -20,7 +20,7 @@
     "@tensorflow/tfjs": "^4.22.0",
     "@tensorflow/tfjs-backend-wasm": "^4.22.0",
     "@vladmandic/face-api": "^1.7.15",
-    "bcrypt": "^5.1.1",
+    "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "exceljs": "^4.4.0",
@@ -38,6 +38,7 @@
     "globals": "^16.5.0"
   },
   "allowScripts": {
-    "bcrypt@5.1.1": true
+    "bcrypt@6.0.0": true,
+    "core-js@3.29.1": true
   }
 }
