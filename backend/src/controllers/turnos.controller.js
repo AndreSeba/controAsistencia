@@ -10,10 +10,10 @@ async function listar(req, res, next) {
 
 async function actualizar(req, res, next) {
   try {
-    const { bloques, aplicaDescuento } = req.body;
+    const { nombre, bloques, aplicaDescuento } = req.body;
     const turno = await turnosService.actualizar(
       Number(req.params.id),
-      { bloques, aplicaDescuento },
+      { nombre, bloques, aplicaDescuento },
       req.usuario.id,
       req.ip
     );

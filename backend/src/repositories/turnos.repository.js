@@ -81,12 +81,12 @@ async function contarEmpleadosAsignados(id, executor = getPool()) {
   return result.rows[0].n;
 }
 
-async function actualizar(id, { bloques, aplicaDescuento }, executor = getPool()) {
-  // Actualizar flag de descuento y columnas legacy.
+async function actualizar(id, { nombre, bloques, aplicaDescuento }, executor = getPool()) {
+  // Actualizar nombre, flag de descuento y columnas legacy.
   const primerBloque = bloques[0];
   await executor.query(
-    'UPDATE turno_catalogo SET hora_inicio = $1, hora_fin = $2, aplica_descuento = $3 WHERE id = $4',
-    [primerBloque.horaInicio, primerBloque.horaFin, aplicaDescuento, id]
+    'UPDATE turno_catalogo SET nombre = $1, hora_inicio = $2, hora_fin = $3, aplica_descuento = $4 WHERE id = $5',
+    [nombre, primerBloque.horaInicio, primerBloque.horaFin, aplicaDescuento, id]
   );
 
   // Reemplazar bloques: DELETE + re-INSERT (más simple que hacer diffs).

@@ -84,6 +84,7 @@ function Turnos() {
   const [areas, setAreas] = useState([]);
   const [error, setError] = useState(null);
   const [editandoId, setEditandoId] = useState(null);
+  const [nombreEdit, setNombreEdit] = useState('');
   const [formBloques, setFormBloques] = useState([{ horaInicio: '', horaFin: '' }]);
   const [formDescuento, setFormDescuento] = useState(true);
   const [modalNueva, setModalNueva] = useState(false);
@@ -124,6 +125,7 @@ function Turnos() {
 
   function abrirEdicion(area) {
     setEditandoId(area.id);
+    setNombreEdit(area.nombre);
     setErrorModal(null);
     // Convertir bloques del API (hora_inicio/hora_fin) al formato del form (horaInicio/horaFin).
     const bloquesForm = (area.bloques || []).map((b) => ({
@@ -143,7 +145,7 @@ function Turnos() {
     try {
       await request(`/turnos/${editandoId}`, {
         method: 'PUT',
-        body: { bloques: formBloques, aplicaDescuento: formDescuento },
+        body: { nombre: nombreEdit, bloques: formBloques, aplicaDescuento: formDescuento },
       });
       setEditandoId(null);
       cargar();
@@ -259,6 +261,16 @@ function Turnos() {
       >
         <form onSubmit={guardar}>
           {errorModal && <p className="error alerta-modal">{errorModal}</p>}
+          <label className="campo">
+            Nombre del área
+            <input
+              placeholder="Cocina, Reparto, Administración…"
+              value={nombreEdit}
+              onChange={(e) => setNombreEdit(e.target.value)}
+              maxLength={20}
+              required
+            />
+          </label>
           <BloqueInputs bloques={formBloques} onChange={setFormBloques} />
           <label className="campo campo-toggle">
             <input
@@ -282,6 +294,7 @@ function Turnos() {
               placeholder="Cocina, Reparto, Administración…"
               value={formNueva.nombre}
               onChange={(e) => setFormNueva({ ...formNueva, nombre: e.target.value })}
+              maxLength={20}
               required
             />
           </label>

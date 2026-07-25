@@ -251,14 +251,14 @@ input:focus-visible, select:focus-visible {
 .campo {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   font-size: 13px;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 .campo-fila {
   display: flex;
   gap: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 .campo-fila .campo { flex: 1; margin-bottom: 0; min-width: 0; }
 @media (max-width: 480px) {
@@ -373,10 +373,10 @@ input:focus-visible, select:focus-visible {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 24px;
+  padding: 20px 24px;
   width: 100%;
-  max-width: 480px;
-  max-height: 90vh;
+  max-width: 620px;
+  max-height: 92vh;
   overflow-y: auto;
   opacity: 1;
   transform: scale(1) translateY(0);
@@ -390,7 +390,7 @@ input:focus-visible, select:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 .modal-header h2 { margin: 0; }
 .modal-cerrar {
