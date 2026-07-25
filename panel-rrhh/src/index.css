@@ -255,6 +255,15 @@ input:focus-visible, select:focus-visible {
   font-size: 13px;
   margin-bottom: 16px;
 }
+.campo-fila {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.campo-fila .campo { flex: 1; margin-bottom: 0; min-width: 0; }
+@media (max-width: 480px) {
+  .campo-fila { flex-direction: column; gap: 16px; }
+}
 .campo input[type="text"],
 .campo input:not([type]) { padding: 8px 10px; }
 .campo-rango input[type="range"] { width: 100%; accent-color: var(--accent); }

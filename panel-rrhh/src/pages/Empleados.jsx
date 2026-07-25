@@ -22,7 +22,6 @@ function Empleados() {
   const [nuevoEsSupervisor, setNuevoEsSupervisor] = useState(false);
   const [nuevaFechaIngreso, setNuevaFechaIngreso] = useState('');
   const [nuevaFechaRetiro, setNuevaFechaRetiro] = useState('');
-  const [tokenEmitido, setTokenEmitido] = useState(null);
   const [idCopiado, setIdCopiado] = useState(null);
   const [enlaceManual, setEnlaceManual] = useState(null); // { empleadoId, url } — fallback si el navegador bloquea el portapapeles
   const fotoInputRef = useRef(null);
@@ -174,12 +173,26 @@ function Empleados() {
     }
   }
 
+  // Copia el link al portapapeles; si el navegador la rechaza (pestaña sin foco,
+  // contexto no seguro, permiso denegado), en vez de fallar en silencio mostramos el
+  // enlace para copiarlo a mano. Compartido por enrolar (primera vez) y "Copiar
+  // enlace" (reenvío) — las dos terminan en lo mismo: un link listo para mandar.
+  async function copiarAlPortapapeles(empleadoId, url) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setIdCopiado(empleadoId);
+      setTimeout(() => setIdCopiado(null), 2000);
+    } catch {
+      setEnlaceManual({ empleadoId, url });
+    }
+  }
+
   async function enrolarDispositivo(empleadoId) {
     setError(null);
-    setTokenEmitido(null);
+    setEnlaceManual(null);
     try {
       const resultado = await request(`/empleados/${empleadoId}/dispositivo`, { method: 'POST' });
-      setTokenEmitido({ empleadoId, token: resultado.activacionToken });
+      await copiarAlPortapapeles(empleadoId, urlActivacion(resultado.activacionToken));
       cargar();
     } catch (err) {
       setError(err.message);
@@ -191,17 +204,7 @@ function Empleados() {
     setEnlaceManual(null);
     try {
       const { activacionToken } = await request(`/empleados/${empleadoId}/dispositivo/enlace`);
-      const url = urlActivacion(activacionToken);
-      try {
-        await navigator.clipboard.writeText(url);
-        setIdCopiado(empleadoId);
-        setTimeout(() => setIdCopiado(null), 2000);
-      } catch {
-        // El navegador puede rechazar la copia automática (pestaña sin foco, contexto
-        // no seguro, permiso denegado) — en vez de fallar en silencio, mostramos el
-        // enlace para copiarlo a mano.
-        setEnlaceManual({ empleadoId, url });
-      }
+      await copiarAlPortapapeles(empleadoId, urlActivacion(activacionToken));
     } catch (err) {
       setError(err.message);
     }
@@ -249,12 +252,6 @@ function Empleados() {
     <div className="page">
       <h1>Personal</h1>
       {error && <p className="error">{error}</p>}
-      {tokenEmitido && (
-        <p className="aviso">
-          Código de activación para el personal #{tokenEmitido.empleadoId} (de un solo uso — una vez que
-          el empleado lo use queda inválido; si hace falta otro, usá "Copiar enlace"): <code>{tokenEmitido.token}</code>
-        </p>
-      )}
       {enlaceManual && (
         <p className="aviso">
           No se pudo copiar automáticamente. Enlace para el personal #{enlaceManual.empleadoId}
@@ -332,18 +329,26 @@ function Empleados() {
       <Modal abierto={modalAbierto} titulo={empleadoEditando ? 'Editar personal' : 'Agregar personal'} onCerrar={() => setModalAbierto(false)}>
         <form onSubmit={guardar}>
           {errorModal && <p className="error alerta-modal">{errorModal}</p>}
-          <label className="campo">
-            Nombre
-            <input placeholder="Nombre" value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)} required />
-          </label>
-          <label className="campo">
-            Apellido
-            <input placeholder="Apellido" value={nuevoApellido} onChange={(e) => setNuevoApellido(e.target.value)} required />
-          </label>
-          <label className="campo">
-            Documento (CI)
-            <input placeholder="Documento (CI)" value={nuevoDocumentoNro} onChange={(e) => setNuevoDocumentoNro(e.target.value)} required />
-          </label>
+          <div className="campo-fila">
+            <label className="campo">
+              Nombre
+              <input placeholder="Nombre" value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)} required />
+            </label>
+            <label className="campo">
+              Apellido
+              <input placeholder="Apellido" value={nuevoApellido} onChange={(e) => setNuevoApellido(e.target.value)} required />
+            </label>
+          </div>
+          <div className="campo-fila">
+            <label className="campo">
+              Documento (CI)
+              <input placeholder="Documento (CI)" value={nuevoDocumentoNro} onChange={(e) => setNuevoDocumentoNro(e.target.value)} required />
+            </label>
+            <label className="campo">
+              Teléfono
+              <input type="tel" placeholder="Ej: 70012345" value={nuevoTelefono} onChange={(e) => setNuevoTelefono(e.target.value)} />
+            </label>
+          </div>
           <label className="campo">
             Área de trabajo
             <select value={nuevaArea} onChange={(e) => setNuevaArea(e.target.value)}>
@@ -354,20 +359,18 @@ function Empleados() {
             </select>
             <span className="ayuda">El atraso se calcula contra el horario del área. Las áreas se administran en "Áreas y horarios".</span>
           </label>
-          <label className="campo">
-            Teléfono
-            <input type="tel" placeholder="Ej: 70012345" value={nuevoTelefono} onChange={(e) => setNuevoTelefono(e.target.value)} />
-          </label>
-          <label className="campo">
-            Fecha de ingreso
-            <input type="date" value={nuevaFechaIngreso} onChange={(e) => setNuevaFechaIngreso(e.target.value)} />
-            <span className="ayuda">Antigüedad para el futuro módulo de Vacaciones. Si no la sabés, se puede completar después.</span>
-          </label>
-          <label className="campo">
-            Fecha de retiro
-            <input type="date" value={nuevaFechaRetiro} onChange={(e) => setNuevaFechaRetiro(e.target.value)} />
-            <span className="ayuda">Solo si el personal ya dejó de trabajar. Dejar vacío mientras esté activo.</span>
-          </label>
+          <div className="campo-fila">
+            <label className="campo">
+              Fecha de ingreso
+              <input type="date" value={nuevaFechaIngreso} onChange={(e) => setNuevaFechaIngreso(e.target.value)} />
+              <span className="ayuda">Antigüedad para el futuro módulo de Vacaciones. Si no la sabés, se puede completar después.</span>
+            </label>
+            <label className="campo">
+              Fecha de retiro
+              <input type="date" value={nuevaFechaRetiro} onChange={(e) => setNuevaFechaRetiro(e.target.value)} />
+              <span className="ayuda">Solo si el personal ya dejó de trabajar. Dejar vacío mientras esté activo.</span>
+            </label>
+          </div>
           <label className="campo campo-check">
             <span>
               <input type="checkbox" checked={nuevoEsSupervisor} onChange={(e) => setNuevoEsSupervisor(e.target.checked)} />
