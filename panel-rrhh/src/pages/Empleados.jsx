@@ -3,6 +3,7 @@ import { useAuth } from '../lib/AuthContext';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { urlActivacion } from '../lib/urlPantalla';
+import { redimensionarFoto } from '../lib/redimensionarFoto';
 import { usePaginacion } from '../hooks/usePaginacion';
 import Paginacion from '../components/Paginacion';
 import { IconGuardar, IconCrear, IconEditar, IconCancelar, IconCopiar, IconDispositivo, IconCamara } from '../components/Icons';
@@ -142,8 +143,9 @@ function Empleados() {
         const creado = await request('/empleados', { method: 'POST', body: datos });
         if (nuevaFoto) {
           try {
+            const fotoReducida = await redimensionarFoto(nuevaFoto);
             const formData = new FormData();
-            formData.append('foto', nuevaFoto);
+            formData.append('foto', fotoReducida, 'foto.jpg');
             await request(`/empleados/${creado.id}/biometria`, {
               method: 'POST',
               body: formData,
@@ -233,8 +235,9 @@ function Empleados() {
     if (!archivo || !empleadoBiometriaId) return;
     setError(null);
     try {
+      const fotoReducida = await redimensionarFoto(archivo);
       const formData = new FormData();
-      formData.append('foto', archivo);
+      formData.append('foto', fotoReducida, 'foto.jpg');
       await request(`/empleados/${empleadoBiometriaId}/biometria`, {
         method: 'POST',
         body: formData,
