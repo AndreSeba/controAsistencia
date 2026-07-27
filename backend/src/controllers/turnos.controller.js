@@ -10,10 +10,10 @@ async function listar(req, res, next) {
 
 async function actualizar(req, res, next) {
   try {
-    const { nombre, bloques, aplicaDescuento } = req.body;
+    const { nombre, bloques, aplicaDescuento, aplicaPagoDiario } = req.body;
     const turno = await turnosService.actualizar(
       Number(req.params.id),
-      { nombre, bloques, aplicaDescuento },
+      { nombre, bloques, aplicaDescuento, aplicaPagoDiario },
       req.usuario.id,
       req.ip
     );
@@ -25,8 +25,8 @@ async function actualizar(req, res, next) {
 
 async function crear(req, res, next) {
   try {
-    const { nombre, bloques, aplicaDescuento } = req.body;
-    res.status(201).json(await turnosService.crear({ nombre, bloques, aplicaDescuento }, req.usuario.id, req.ip));
+    const { nombre, bloques, aplicaDescuento, aplicaPagoDiario } = req.body;
+    res.status(201).json(await turnosService.crear({ nombre, bloques, aplicaDescuento, aplicaPagoDiario }, req.usuario.id, req.ip));
   } catch (err) {
     next(err);
   }

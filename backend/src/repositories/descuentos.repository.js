@@ -85,8 +85,13 @@ async function planillaPorRango(fechaInicio, fechaFin) {
   const pool = getPool();
   const result = await pool.query(
     `WITH dias AS (
+       -- Solo cuenta como "día trabajado" (para el pago fijo) si el área de esa
+       -- jornada tiene aplica_pago_diario = true. Administración, por ejemplo, no
+       -- cobra por este mecanismo (sueldo aparte) — sus jornadas quedan afuera de la
+       -- planilla directamente, no aparecen con 0 Bs.
        SELECT tj.empleado_id, tj.sucursal_id, COUNT(DISTINCT tj.fecha) AS dias_trabajados
        FROM turno_jornada tj
+       JOIN turno_catalogo tc ON tc.id = tj.turno_catalogo_id AND tc.aplica_pago_diario = TRUE
        WHERE tj.fecha BETWEEN $1 AND $2
        GROUP BY tj.empleado_id, tj.sucursal_id
      ),

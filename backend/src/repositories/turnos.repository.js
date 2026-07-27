@@ -3,7 +3,7 @@ const { getPool } = require('../config/db');
 async function listarCatalogo() {
   const pool = getPool();
   const result = await pool.query(`
-    SELECT tc.id, tc.nombre, tc.activo, tc.aplica_descuento,
+    SELECT tc.id, tc.nombre, tc.activo, tc.aplica_descuento, tc.aplica_pago_diario,
            json_agg(
              json_build_object(
                'numero_bloque', tb.numero_bloque,
@@ -14,7 +14,7 @@ async function listarCatalogo() {
     FROM turno_catalogo tc
     LEFT JOIN turno_bloque tb ON tb.turno_catalogo_id = tc.id
     WHERE tc.activo = TRUE
-    GROUP BY tc.id, tc.nombre, tc.activo, tc.aplica_descuento
+    GROUP BY tc.id, tc.nombre, tc.activo, tc.aplica_descuento, tc.aplica_pago_diario
     ORDER BY MIN(tb.hora_inicio)
   `);
   // Si un área no tiene bloques (no debería pasar), devolver array vacío en vez de [null].
@@ -26,7 +26,7 @@ async function listarCatalogo() {
 
 async function obtenerCatalogoPorId(id, executor = getPool()) {
   const result = await executor.query(
-    `SELECT tc.id, tc.nombre, tc.activo, tc.aplica_descuento,
+    `SELECT tc.id, tc.nombre, tc.activo, tc.aplica_descuento, tc.aplica_pago_diario,
             json_agg(
               json_build_object(
                 'numero_bloque', tb.numero_bloque,
@@ -37,7 +37,7 @@ async function obtenerCatalogoPorId(id, executor = getPool()) {
      FROM turno_catalogo tc
      LEFT JOIN turno_bloque tb ON tb.turno_catalogo_id = tc.id
      WHERE tc.id = $1
-     GROUP BY tc.id, tc.nombre, tc.activo, tc.aplica_descuento`,
+     GROUP BY tc.id, tc.nombre, tc.activo, tc.aplica_descuento, tc.aplica_pago_diario`,
     [id]
   );
   if (!result.rows[0]) return null;
@@ -45,15 +45,15 @@ async function obtenerCatalogoPorId(id, executor = getPool()) {
   return { ...r, bloques: r.bloques?.[0] === null ? [] : r.bloques };
 }
 
-async function crearCatalogo({ nombre, bloques, aplicaDescuento }, executor = getPool()) {
+async function crearCatalogo({ nombre, bloques, aplicaDescuento, aplicaPagoDiario }, executor = getPool()) {
   // Insertar el área sin hora_inicio/hora_fin propias (se usan los del primer bloque
   // como fallback para retrocompatibilidad de columnas legacy).
   const primerBloque = bloques[0];
   const result = await executor.query(
-    `INSERT INTO turno_catalogo (nombre, hora_inicio, hora_fin, aplica_descuento)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO turno_catalogo (nombre, hora_inicio, hora_fin, aplica_descuento, aplica_pago_diario)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING id`,
-    [nombre, primerBloque.horaInicio, primerBloque.horaFin, aplicaDescuento]
+    [nombre, primerBloque.horaInicio, primerBloque.horaFin, aplicaDescuento, aplicaPagoDiario]
   );
   const turnoId = result.rows[0].id;
 
@@ -81,12 +81,12 @@ async function contarEmpleadosAsignados(id, executor = getPool()) {
   return result.rows[0].n;
 }
 
-async function actualizar(id, { nombre, bloques, aplicaDescuento }, executor = getPool()) {
-  // Actualizar nombre, flag de descuento y columnas legacy.
+async function actualizar(id, { nombre, bloques, aplicaDescuento, aplicaPagoDiario }, executor = getPool()) {
+  // Actualizar nombre, flags de descuento/pago y columnas legacy.
   const primerBloque = bloques[0];
   await executor.query(
-    'UPDATE turno_catalogo SET nombre = $1, hora_inicio = $2, hora_fin = $3, aplica_descuento = $4 WHERE id = $5',
-    [nombre, primerBloque.horaInicio, primerBloque.horaFin, aplicaDescuento, id]
+    'UPDATE turno_catalogo SET nombre = $1, hora_inicio = $2, hora_fin = $3, aplica_descuento = $4, aplica_pago_diario = $5 WHERE id = $6',
+    [nombre, primerBloque.horaInicio, primerBloque.horaFin, aplicaDescuento, aplicaPagoDiario, id]
   );
 
   // Reemplazar bloques: DELETE + re-INSERT (más simple que hacer diffs).

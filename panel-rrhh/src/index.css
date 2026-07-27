@@ -134,6 +134,9 @@ input:focus-visible, select:focus-visible {
 .sidebar-header {
   padding: 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .sidebar-header .marca {
@@ -141,6 +144,41 @@ input:focus-visible, select:focus-visible {
   color: #fff;
   letter-spacing: 0.02em;
   font-size: 18px;
+}
+
+/* Vista previa del logo en Áreas y horarios → Identidad de la empresa. */
+.logo-config {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.logo-preview {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+.logo-preview--vacio {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-style: dashed;
+  text-align: center;
+}
+
+/* Logo de la empresa (opcional, lo carga RRHH). `contain` para no deformar logos
+   apaisados ni cuadrados: entra el que entre, sin recortar. */
+.marca-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  border-radius: 6px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .sidebar-nav {

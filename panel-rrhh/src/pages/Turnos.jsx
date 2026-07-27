@@ -4,7 +4,8 @@ import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { usePaginacion } from '../hooks/usePaginacion';
 import Paginacion from '../components/Paginacion';
-import { IconGuardar, IconCrear, IconEditar, IconEliminar, IconCancelar } from '../components/Icons';
+import { IconGuardar, IconCrear, IconEditar, IconEliminar, IconCancelar, IconCamara } from '../components/Icons';
+import { redimensionarFoto } from '../lib/redimensionarFoto';
 
 const BLOQUE_VACIO = { horaInicio: '', horaFin: '' };
 
@@ -87,11 +88,16 @@ function Turnos() {
   const [nombreEdit, setNombreEdit] = useState('');
   const [formBloques, setFormBloques] = useState([{ horaInicio: '', horaFin: '' }]);
   const [formDescuento, setFormDescuento] = useState(true);
+  const [formPagoDiario, setFormPagoDiario] = useState(true);
   const [modalNueva, setModalNueva] = useState(false);
-  const [formNueva, setFormNueva] = useState({ nombre: '', bloques: [{ horaInicio: '', horaFin: '' }], aplicaDescuento: true });
+  const [formNueva, setFormNueva] = useState({ nombre: '', bloques: [{ horaInicio: '', horaFin: '' }], aplicaDescuento: true, aplicaPagoDiario: true });
   const [errorModal, setErrorModal] = useState(null);
   const [margen, setMargen] = useState('');
   const [pagoDia, setPagoDia] = useState('');
+  const [logoUrl, setLogoUrl] = useState(null);
+  const [subiendoLogo, setSubiendoLogo] = useState(false);
+  const logoInputRef = useRef(null);
+  const subiendoLogoRef = useRef(false);
   const [configGuardada, setConfigGuardada] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [guardandoConfig, setGuardandoConfig] = useState(false);
@@ -115,6 +121,7 @@ function Turnos() {
       setAreas(listaAreas);
       setMargen(String(configuracion.margenAnticipacionMin));
       setPagoDia(String(configuracion.pagoDiaBs));
+      setLogoUrl(configuracion.logoUrl || null);
     } catch (err) {
       setError(err.message);
     }
@@ -134,6 +141,7 @@ function Turnos() {
     }));
     setFormBloques(bloquesForm.length > 0 ? bloquesForm : [{ horaInicio: '', horaFin: '' }]);
     setFormDescuento(area.aplica_descuento !== false);
+    setFormPagoDiario(area.aplica_pago_diario !== false);
   }
 
   async function guardar(e) {
@@ -145,7 +153,7 @@ function Turnos() {
     try {
       await request(`/turnos/${editandoId}`, {
         method: 'PUT',
-        body: { nombre: nombreEdit, bloques: formBloques, aplicaDescuento: formDescuento },
+        body: { nombre: nombreEdit, bloques: formBloques, aplicaDescuento: formDescuento, aplicaPagoDiario: formPagoDiario },
       });
       setEditandoId(null);
       cargar();
@@ -158,7 +166,7 @@ function Turnos() {
   }
 
   function abrirNueva() {
-    setFormNueva({ nombre: '', bloques: [{ horaInicio: '', horaFin: '' }], aplicaDescuento: true });
+    setFormNueva({ nombre: '', bloques: [{ horaInicio: '', horaFin: '' }], aplicaDescuento: true, aplicaPagoDiario: true });
     setErrorModal(null);
     setModalNueva(true);
   }
@@ -188,6 +196,43 @@ function Turnos() {
     try {
       await request(`/turnos/${area.id}`, { method: 'DELETE' });
       cargar();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  // Mismo criterio que la foto de biometría: se reduce en el navegador antes de subir.
+  // Un logo que sale de Canva/Illustrator puede pesar varios MB y no aporta nada a 36px.
+  async function manejarLogoSeleccionado(e) {
+    const archivo = e.target.files?.[0];
+    e.target.value = '';
+    if (!archivo || subiendoLogoRef.current) return;
+    subiendoLogoRef.current = true;
+    setError(null);
+    setSubiendoLogo(true);
+    try {
+      const reducido = await redimensionarFoto(archivo, 256);
+      const formData = new FormData();
+      formData.append('logo', reducido, 'logo.jpg');
+      const { logoUrl: nuevo } = await request('/configuracion/logo', {
+        method: 'POST',
+        body: formData,
+        isFormData: true,
+      });
+      setLogoUrl(nuevo);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      subiendoLogoRef.current = false;
+      setSubiendoLogo(false);
+    }
+  }
+
+  async function quitarLogo() {
+    setError(null);
+    try {
+      await request('/configuracion/logo', { method: 'DELETE' });
+      setLogoUrl(null);
     } catch (err) {
       setError(err.message);
     }
@@ -227,7 +272,7 @@ function Turnos() {
 
       <table className="tabla">
         <thead>
-          <tr><th>Área</th><th>Horario</th><th>Descuento</th><th></th></tr>
+          <tr><th>Área</th><th>Horario</th><th>Descuento</th><th>Pago por día</th><th></th></tr>
         </thead>
         <tbody>
           {datosPaginados.map((t) => (
@@ -237,6 +282,11 @@ function Turnos() {
               <td>
                 <span className={`badge ${t.aplica_descuento ? 'badge-activo' : 'badge-inactivo'}`}>
                   {t.aplica_descuento ? 'Sí' : 'No'}
+                </span>
+              </td>
+              <td>
+                <span className={`badge ${t.aplica_pago_diario ? 'badge-activo' : 'badge-inactivo'}`}>
+                  {t.aplica_pago_diario ? 'Sí' : 'No'}
                 </span>
               </td>
               <td>
@@ -280,6 +330,15 @@ function Turnos() {
             />
             Aplica descuento por atraso
           </label>
+          <label className="campo campo-toggle">
+            <input
+              type="checkbox"
+              checked={formPagoDiario}
+              onChange={(e) => setFormPagoDiario(e.target.checked)}
+            />
+            Aplica pago por día
+          </label>
+          <span className="ayuda">Desmarcá esto para áreas que no cobran por día trabajado (ej. Administración, sueldo aparte) — no van a aparecer en la Planilla quincenal.</span>
           <button type="submit" className="boton-icono" title="Guardar" aria-label="Guardar" disabled={guardando}><IconGuardar /></button>
           <button type="button" className="boton-icono" title="Cancelar" aria-label="Cancelar" onClick={() => setEditandoId(null)} disabled={guardando}><IconCancelar /></button>
         </form>
@@ -310,6 +369,15 @@ function Turnos() {
             />
             Aplica descuento por atraso
           </label>
+          <label className="campo campo-toggle">
+            <input
+              type="checkbox"
+              checked={formNueva.aplicaPagoDiario}
+              onChange={(e) => setFormNueva({ ...formNueva, aplicaPagoDiario: e.target.checked })}
+            />
+            Aplica pago por día
+          </label>
+          <span className="ayuda">Desmarcá esto para áreas que no cobran por día trabajado (ej. Administración, sueldo aparte) — no van a aparecer en la Planilla quincenal.</span>
           <button type="submit" className="boton-icono" title="Crear" aria-label="Crear" disabled={guardando}><IconCrear /></button>
           <button type="button" className="boton-icono" title="Cancelar" aria-label="Cancelar" onClick={() => setModalNueva(false)} disabled={guardando}><IconCancelar /></button>
         </form>
@@ -347,6 +415,48 @@ function Turnos() {
           <button type="submit" className="boton-icono" title={guardandoConfig ? 'Guardando…' : 'Guardar'} aria-label="Guardar" disabled={guardandoConfig}><IconGuardar /></button>
           {configGuardada && <span className="ayuda">Guardado.</span>}
         </form>
+      </div>
+
+      <div className="card">
+        <h2>Identidad de la empresa</h2>
+        <p className="subtitulo" style={{ marginTop: 0 }}>
+          El logo se muestra en el panel y en la app del personal. Cuadrado o apaisado, se
+          ajusta solo; si no cargás ninguno, queda solo el texto.
+        </p>
+        <div className="logo-config">
+          {logoUrl
+            ? <img src={logoUrl} alt="Logo de la empresa" className="logo-preview" />
+            : <div className="logo-preview logo-preview--vacio">Sin logo</div>}
+          <input
+            ref={logoInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            style={{ display: 'none' }}
+            onChange={manejarLogoSeleccionado}
+          />
+          <button
+            type="button"
+            className="boton-icono"
+            title={subiendoLogo ? 'Subiendo…' : (logoUrl ? 'Cambiar logo' : 'Subir logo')}
+            aria-label={logoUrl ? 'Cambiar logo' : 'Subir logo'}
+            onClick={() => logoInputRef.current?.click()}
+            disabled={subiendoLogo}
+          >
+            <IconCamara />
+          </button>
+          {logoUrl && (
+            <button
+              type="button"
+              className="boton-icono"
+              title="Quitar logo"
+              aria-label="Quitar logo"
+              onClick={quitarLogo}
+              disabled={subiendoLogo}
+            >
+              <IconEliminar />
+            </button>
+          )}
+        </div>
       </div>
 
       <ConfirmDialog

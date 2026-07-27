@@ -71,14 +71,15 @@ async function obtenerOFallar(id) {
 // de áreas (cada empleado tiene SU área con horario propio), dos áreas pueden
 // compartir horario total o parcialmente (Cocina 8-16, Reparto 9-17) sin ambigüedad:
 // el atraso se calcula contra el área del empleado, no contra el turno más cercano.
-async function actualizar(id, { nombre, bloques, aplicaDescuento }, usuarioId, ip) {
+async function actualizar(id, { nombre, bloques, aplicaDescuento, aplicaPagoDiario }, usuarioId, ip) {
   if (!nombre?.trim()) throw new TurnoError('nombre del área es requerido');
   if (nombre.trim().length > 20) throw new TurnoError('nombre del área: máximo 20 caracteres');
   const anterior = await obtenerOFallar(id);
   validarBloques(bloques);
 
   const descuentoFlag = aplicaDescuento !== false;
-  await turnosRepo.actualizar(id, { nombre: nombre.trim(), bloques, aplicaDescuento: descuentoFlag });
+  const pagoDiarioFlag = aplicaPagoDiario !== false;
+  await turnosRepo.actualizar(id, { nombre: nombre.trim(), bloques, aplicaDescuento: descuentoFlag, aplicaPagoDiario: pagoDiarioFlag });
 
   await auditoriaRepo.registrar({
     usuarioId,
@@ -87,21 +88,25 @@ async function actualizar(id, { nombre, bloques, aplicaDescuento }, usuarioId, i
     registroId: id,
     ip,
     detalle: {
-      anterior: { nombre: anterior.nombre, bloques: anterior.bloques, aplica_descuento: anterior.aplica_descuento },
-      nuevo: { nombre: nombre.trim(), bloques, aplica_descuento: descuentoFlag },
+      anterior: {
+        nombre: anterior.nombre, bloques: anterior.bloques,
+        aplica_descuento: anterior.aplica_descuento, aplica_pago_diario: anterior.aplica_pago_diario,
+      },
+      nuevo: { nombre: nombre.trim(), bloques, aplica_descuento: descuentoFlag, aplica_pago_diario: pagoDiarioFlag },
     },
   });
 
   return obtenerOFallar(id);
 }
 
-async function crear({ nombre, bloques, aplicaDescuento }, usuarioId, ip) {
+async function crear({ nombre, bloques, aplicaDescuento, aplicaPagoDiario }, usuarioId, ip) {
   if (!nombre?.trim()) throw new TurnoError('nombre del área es requerido');
   if (nombre.trim().length > 20) throw new TurnoError('nombre del área: máximo 20 caracteres');
   validarBloques(bloques);
 
   const descuentoFlag = aplicaDescuento !== false;
-  const id = await turnosRepo.crearCatalogo({ nombre: nombre.trim(), bloques, aplicaDescuento: descuentoFlag });
+  const pagoDiarioFlag = aplicaPagoDiario !== false;
+  const id = await turnosRepo.crearCatalogo({ nombre: nombre.trim(), bloques, aplicaDescuento: descuentoFlag, aplicaPagoDiario: pagoDiarioFlag });
 
   await auditoriaRepo.registrar({
     usuarioId,
@@ -109,7 +114,7 @@ async function crear({ nombre, bloques, aplicaDescuento }, usuarioId, ip) {
     tabla: 'turno_catalogo',
     registroId: id,
     ip,
-    detalle: { nombre: nombre.trim(), bloques, aplica_descuento: descuentoFlag },
+    detalle: { nombre: nombre.trim(), bloques, aplica_descuento: descuentoFlag, aplica_pago_diario: pagoDiarioFlag },
   });
 
   return obtenerOFallar(id);
