@@ -1,0 +1,8 @@
+{
+  "compartment_id": "ocid1.tenancy.oc1..aaaaaaaald7iplvkh5evrmm5unkdsvmpmizx75la5kpddjqf6poav424rkxq",
+  "availability_domain": "IfBr:SA-SAOPAULO-1-AD-1",
+  "image_id": "ocid1.image.oc1.sa-saopaulo-1.aaaaaaaalxwf2qfhwn7czpwyb4cbzt6rrnwaxhslgucqlzuryulz37ljhfqa",
+  "image_name": "Canonical-Ubuntu-22.04-aarch64-2026.07.17-0",
+  "subnet_id": "ocid1.subnet.oc1.sa-saopaulo-1.aaaaaaaa4kmeaimr6hb6zn5najszlxbuotk4f5dgyzf2zz2mtkxegxkfwrkq",
+  "subnet_name": "subnet-20260726-1357"
+}

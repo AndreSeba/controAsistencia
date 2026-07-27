@@ -1,0 +1,36 @@
+[Unit]
+Description=Control de Asistencia — backend
+Documentation=https://github.com/AndreSeba/controAsistencia
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=controasist
+Group=controasist
+WorkingDirectory=/opt/controasistencia/repo/backend
+
+# Las variables van en un archivo aparte (chmod 600), no en esta unidad:
+# systemd expone el contenido de las unidades a cualquier usuario del sistema.
+EnvironmentFile=/opt/controasistencia/.env
+
+# `node src/server.js` directo, no `npm start`: ese script usa --env-file=.env,
+# que en el servidor no existe (las variables las inyecta systemd). Mismo criterio
+# que en Render.
+ExecStart=/usr/bin/node src/server.js
+
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=controasistencia
+
+# Endurecimiento básico: el proceso no necesita tocar nada fuera de su carpeta.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/controasistencia
+
+[Install]
+WantedBy=multi-user.target

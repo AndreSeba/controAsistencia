@@ -1222,3 +1222,173 @@ details[open] .tarifas-contenido {
   accent-color: var(--accent);
   cursor: pointer;
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   RESPONSIVE — dos formas distintas, no una escalada
+   ────────────────────────────────────────────────────────────────────
+   PC / laptop (> 768px): barra lateral fija de 250px + tablas completas.
+     Es el diseño de siempre, no se toca nada acá arriba.
+
+   Celular (<= 768px): la barra lateral pasa ARRIBA (nav horizontal
+     deslizable) y las tablas marcadas con .tabla-cards se convierten en
+     tarjetas, una por fila. Sin esto, los 250px fijos de la barra dejan
+     ~125px de ancho útil en un teléfono de 375px.
+
+   Se migra módulo por módulo: una tabla solo cambia de forma si su
+   <table> lleva la clase .tabla-cards y sus <td> tienen data-label.
+   Hoy: Personal. Las demás siguen como estaban hasta que se migren.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* Barra de acciones sobre una tabla (botón de alta + buscador).
+   En celular el buscador deja su ancho fijo y ocupa lo que sobra. */
+.barra-acciones {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.barra-acciones .buscador-tabla {
+  padding: 8px;
+  width: 300px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+/* .boton-nuevo trae margen inferior para cuando va suelto sobre la tabla;
+   dentro de la barra desalinea, el espaciado lo da la barra. */
+.barra-acciones .boton-nuevo { margin-bottom: 0; }
+
+@media (max-width: 768px) {
+  /* ── Layout general ── */
+  .layout { flex-direction: column; }
+
+  .sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 2px solid var(--brand);
+    /* Marca y botones comparten la primera fila; el nav ocupa la segunda,
+       así el encabezado no come alto de pantalla en un teléfono. */
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "marca acciones"
+      "nav   nav";
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+
+  .sidebar-header {
+    grid-area: marca;
+    padding: 10px 14px;
+    border-bottom: none;
+  }
+  .sidebar-header .marca { font-size: 15px; }
+
+  .sidebar-footer {
+    grid-area: acciones;
+    padding: 10px 14px;
+    border-top: none;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+  /* El nombre del usuario se oculta en celular: no es accionable y el
+     espacio del encabezado se necesita para los botones. */
+  .sidebar-footer .usuario-info { display: none; }
+  .usuario-acciones button { padding: 6px 10px; font-size: 12px; }
+
+  .sidebar-nav {
+    grid-area: nav;
+    flex-direction: row;
+    padding: 0 8px 8px;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .sidebar-nav::-webkit-scrollbar { display: none; }
+  .sidebar-nav a {
+    padding: 7px 12px;
+    gap: 7px;
+    font-size: 13px;
+    white-space: nowrap;
+    border-radius: 999px;
+  }
+  .sidebar-nav a.active {
+    border-right: none;
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .main-content { padding: 14px; }
+  .page-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+
+  /* ── Barra de acciones ── */
+  .barra-acciones .buscador-tabla {
+    width: auto;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* ── Tabla → tarjetas ──
+     Cada <td> muestra el encabezado de su columna con data-label, así no
+     hace falta duplicar el marcado en el JSX ni mantener dos vistas. */
+  .tabla-cards {
+    border: none;
+    background: transparent;
+    border-radius: 0;
+  }
+  .tabla-cards thead { display: none; }
+  .tabla-cards tbody,
+  .tabla-cards td { display: block; width: 100%; }
+
+  .tabla-cards tr {
+    /* flex column habilita reordenar: las celdas de acciones van al final
+       de la tarjeta aunque en la tabla estén intercaladas entre datos. */
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    padding: 4px 0;
+  }
+
+  .tabla-cards td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 7px 12px;
+    border-bottom: none;
+    text-align: right;
+    word-break: break-word;
+  }
+  .tabla-cards td::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-weight: 600;
+    text-align: left;
+    flex-shrink: 0;
+  }
+
+  /* Celdas de botones: ancho completo, sin etiqueta al costado, al final
+     de la tarjeta y separadas del bloque de datos. */
+  .tabla-cards td.celda-acciones {
+    order: 1;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 12px 4px;
+    text-align: left;
+  }
+  .tabla-cards td.celda-acciones::before { content: none; }
+  .tabla-cards td.celda-acciones button { margin: 0; }
+  /* La celda de Editar es la primera del bloque de acciones (por orden de
+     origen), así que lleva ella la línea que lo separa de los datos. */
+  .tabla-cards td.celda-editar {
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+    padding-top: 10px;
+  }
+}

@@ -262,17 +262,17 @@ function Empleados() {
         </p>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', gap: '16px' }}>
+      <div className="barra-acciones">
         <button type="button" className="boton-nuevo boton-icono" title="Agregar personal" aria-label="Agregar personal" onClick={abrirCrear}><IconCrear /></button>
         <input
           type="search"
+          className="buscador-tabla"
           placeholder="Buscar por nombre o CI..."
           value={busqueda}
           onChange={(e) => {
             setBusqueda(e.target.value);
             setPagina(1);
           }}
-          style={{ padding: '8px', width: '300px', borderRadius: '4px', border: '1px solid #ccc' }}
         />
       </div>
 
@@ -284,27 +284,29 @@ function Empleados() {
         onChange={manejarFotoSeleccionada}
       />
 
-      <table className="tabla">
+      {/* .tabla-cards: en celular (<=768px) cada fila se muestra como tarjeta,
+          usando el data-label de cada celda como etiqueta. Ver index.css. */}
+      <table className="tabla tabla-cards">
         <thead>
           <tr>
-            <th>Nombre</th><th>Apellido</th><th>Documento</th><th>Área</th><th>Teléfono</th><th>Estado</th><th>Acciones</th><th>Dispositivo</th><th>Biometría</th>
+            <th>Nombre</th><th>Apellido</th><th>Documento</th><th>Área</th><th>Teléfono</th><th>Estado</th><th>Editar</th><th>Dispositivo</th><th>Biometría</th><th>Enrolamiento</th>
           </tr>
         </thead>
         <tbody>
           {datosPaginados.map((emp) => (
             <tr key={emp.id}>
-              <td>{emp.nombre}{emp.es_supervisor && <span className="badge-supervisor" title="Supervisor de sucursales"> (Supervisor)</span>}</td>
-              <td>{emp.apellido}</td>
-              <td>{emp.documento_nro}</td>
-              <td>{emp.area_nombre ?? '—'}</td>
-              <td>{emp.telefono ?? '—'}</td>
-              <td>{emp.estado}</td>
-              <td>
+              <td data-label="Nombre">{emp.nombre}{emp.es_supervisor && <span className="badge-supervisor" title="Supervisor de sucursales"> (Supervisor)</span>}</td>
+              <td data-label="Apellido">{emp.apellido}</td>
+              <td data-label="Documento">{emp.documento_nro}</td>
+              <td data-label="Área">{emp.area_nombre ?? '—'}</td>
+              <td data-label="Teléfono">{emp.telefono ?? '—'}</td>
+              <td data-label="Estado">{emp.estado}</td>
+              <td className="celda-acciones celda-editar">
                 <button type="button" className="boton-icono" title="Editar" aria-label="Editar" onClick={() => abrirEditar(emp)}><IconEditar /></button>
               </td>
-              <td>{emp.dispositivo_id ? 'Activo' : 'Sin enrolar'}</td>
-              <td>{emp.biometria_id ? 'Activa' : 'Sin enrolar'}</td>
-              <td>
+              <td data-label="Dispositivo">{emp.dispositivo_id ? 'Activo' : 'Sin enrolar'}</td>
+              <td data-label="Biometría">{emp.biometria_id ? 'Activa' : 'Sin enrolar'}</td>
+              <td className="celda-acciones">
                 {emp.dispositivo_id ? (
                   <>
                     <button type="button" onClick={() => copiarEnlace(emp.id)}><IconCopiar /> Copiar enlace</button>
