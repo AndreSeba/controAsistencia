@@ -2,7 +2,8 @@ const { getPool } = require('../config/db');
 
 async function buscarActivoPorEmpleado(empleadoId, executor = getPool()) {
   const result = await executor.query(
-    `SELECT id, empleado_id, estado, fecha_registro, aprobado_por_rrhh, device_token
+    `SELECT id, empleado_id, estado, fecha_registro, aprobado_por_rrhh, device_token,
+            activacion_token
      FROM dispositivo_empleado
      WHERE empleado_id = $1 AND estado = 'activo'`,
     [empleadoId]
@@ -43,19 +44,27 @@ async function generarActivacion(id, activacionToken, executor = getPool()) {
   );
 }
 
+// El código sigue siendo válido después de usarse (decisión 2026-07-26, ver
+// dispositivos.service.js): NO se filtra por activacion_usado_en. El único filtro
+// real es que el dispositivo siga activo — revocarlo mata el link.
 async function buscarPorActivacionToken(activacionToken, executor = getPool()) {
   const result = await executor.query(
     `SELECT id, empleado_id, device_token
      FROM dispositivo_empleado
-     WHERE activacion_token = $1 AND activacion_usado_en IS NULL AND estado = 'activo'`,
+     WHERE activacion_token = $1 AND estado = 'activo'`,
     [activacionToken]
   );
   return result.rows[0] || null;
 }
 
-async function marcarActivacionUsada(id, executor = getPool()) {
+// Deja constancia de la PRIMERA activación (dato de auditoría: cuándo configuró el
+// teléfono). COALESCE para no pisarla en cada reapertura del link, y el token se
+// conserva — ya no invalida nada.
+async function registrarPrimeraActivacion(id, executor = getPool()) {
   await executor.query(
-    `UPDATE dispositivo_empleado SET activacion_usado_en = NOW(), activacion_token = NULL WHERE id = $1`,
+    `UPDATE dispositivo_empleado
+     SET activacion_usado_en = COALESCE(activacion_usado_en, NOW())
+     WHERE id = $1`,
     [id]
   );
 }
@@ -67,5 +76,5 @@ module.exports = {
   revocar,
   generarActivacion,
   buscarPorActivacionToken,
-  marcarActivacionUsada,
+  registrarPrimeraActivacion,
 };

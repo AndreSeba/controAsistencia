@@ -43,21 +43,38 @@ async function enrolar(empleadoId, usuarioId, ip) {
   return { id: creado.id, activacionToken, fechaRegistro: creado.fecha_registro };
 }
 
-// Reenvío del enlace de activación: genera un código de activación NUEVO (de un
-// solo uso), invalidando cualquier link anterior sin usar. No regenera el
-// device_token real (eso rompería el dispositivo ya configurado si ya fue activado).
+// Reenvío del enlace de activación. Si ya hay un código vigente sin usar, devuelve
+// ESE MISMO — no genera uno nuevo.
+//
+// Antes cada click generaba un código nuevo y mataba el anterior, y eso rompía el
+// flujo real de RRHH (2026-07-25, enrolamiento en vivo): "Enrolar dispositivo" ya
+// copia un link, pero la confirmación de copiado pasa desapercibida, así que RRHH
+// tocaba además "Copiar enlace" — invalidando en silencio el link que acababa de
+// mandar por WhatsApp. El empleado abría ese link y le salía "código ya usado".
+// Devolver el mismo código hace la acción idempotente: se puede tocar N veces y el
+// link mandado sigue sirviendo. No afecta la seguridad — sigue siendo de un solo
+// uso y sigue sin exponer el device_token real.
 async function obtenerEnlace(empleadoId) {
   const activo = await dispositivosRepo.buscarActivoPorEmpleado(empleadoId);
   if (!activo) throw new DispositivoError('Empleado sin dispositivo activo', 404);
+  if (activo.activacion_token) return { activacionToken: activo.activacion_token };
+
   const activacionToken = crypto.randomBytes(24).toString('hex');
   await dispositivosRepo.generarActivacion(activo.id, activacionToken);
   return { activacionToken };
 }
 
 // Canjea el código de activación por el device_token real — lo llama la PWA (sin
-// JWT, es su único credencial en ese momento), nunca el panel. Un mismo código solo
-// funciona una vez: el segundo intento (link reenviado a otra persona, o reabierto
-// por error) cae acá con 404.
+// JWT, es su único credencial en ese momento), nunca el panel.
+//
+// REUTILIZABLE (decisión del usuario 2026-07-26, reabre la decisión del 2026-07-16):
+// el mismo link sirve todas las veces que haga falta, hasta que RRHH revoque el
+// dispositivo. El de-un-solo-uso rompía el flujo real: WhatsApp abre los links en su
+// navegador interno, así que el empleado activaba ahí, después abría Chrome (sin el
+// token guardado), volvía al chat, tocaba el mismo link y ya no servía. Pasó con
+// varias personas de Administración el 2026-07-25.
+// Lo que SÍ se conserva del cambio anterior: el device_token real nunca viaja en la
+// URL — sigue siendo un código intermedio, y revocar el dispositivo lo mata.
 //
 // El enlace de un dispositivo CORPORATIVO (P16) no lleva un código de un solo uso —
 // lleva directo el device_token permanente del celular físico (decisión consciente,
@@ -69,7 +86,7 @@ async function obtenerEnlace(empleadoId) {
 async function activarPorToken(activacionToken) {
   const dispositivo = await dispositivosRepo.buscarPorActivacionToken(activacionToken);
   if (dispositivo) {
-    await dispositivosRepo.marcarActivacionUsada(dispositivo.id);
+    await dispositivosRepo.registrarPrimeraActivacion(dispositivo.id);
     return { deviceToken: dispositivo.device_token };
   }
 
@@ -79,7 +96,7 @@ async function activarPorToken(activacionToken) {
   }
 
   throw new DispositivoError(
-    'Este código de activación ya fue usado o no es válido. Pedí a RRHH que te comparta uno nuevo.',
+    'Este código de activación no es válido o el dispositivo fue revocado. Pedí a RRHH que te comparta el enlace de nuevo.',
     404
   );
 }
