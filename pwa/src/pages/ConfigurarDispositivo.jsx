@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { guardarDeviceToken } from '../lib/dispositivoStore';
 import { request } from '../lib/api';
 import { IconGuardar } from '../components/Icons';
+import LogoEmpresa from '../components/LogoEmpresa';
 
 function ConfigurarDispositivo({ onConfigurado, errorInicial }) {
   const [token, setToken] = useState('');
@@ -36,6 +37,7 @@ function ConfigurarDispositivo({ onConfigurado, errorInicial }) {
   return (
     <div className="pantalla-centrada">
       <div className="tarjeta">
+        <LogoEmpresa />
         <h1>Configurar este teléfono</h1>
         <p className="ayuda">
           Pedí el código de activación que te dieron al enrolarte. Se ingresa una sola vez.

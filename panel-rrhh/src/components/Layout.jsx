@@ -1,12 +1,22 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
 import { alternarTema, obtenerTema } from '../lib/tema';
 
 function Layout() {
-  const { usuario, logout } = useAuth();
+  const { usuario, logout, request } = useAuth();
   const navigate = useNavigate();
   const [tema, setTema] = useState(obtenerTema());
+  const [logoUrl, setLogoUrl] = useState(null);
+
+  // El logo lo carga la empresa desde Áreas y horarios → Identidad. Si no hay ninguno
+  // cargado (o la consulta falla), queda solo el texto: nunca bloquea el panel.
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial de datos, no sincronización de UI
+  useEffect(() => {
+    request('/configuracion')
+      .then((c) => setLogoUrl(c.logoUrl || null))
+      .catch(() => {});
+  }, [request]);
 
   async function manejarLogout() {
     await logout();
@@ -21,6 +31,7 @@ function Layout() {
     <div className="layout">
       <aside className="sidebar">
         <div className="sidebar-header">
+          {logoUrl && <img src={logoUrl} alt="" className="marca-logo" />}
           <span className="marca">Control de Asistencia</span>
         </div>
         <nav className="sidebar-nav">

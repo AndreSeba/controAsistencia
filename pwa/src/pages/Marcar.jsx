@@ -5,6 +5,7 @@ import { request, ApiError } from '../lib/api';
 import { obtenerUbicacion } from '../lib/geolocalizacion';
 import { guardarMarcacionOffline, sincronizarPendientes } from '../lib/offlineSync';
 import { IconEntrada, IconSalida, IconVisita, IconVolver, IconPersonas } from '../components/Icons';
+import LogoEmpresa from '../components/LogoEmpresa';
 
 const SEGUNDOS_PARA_CAPTURAR = 3;
 
@@ -96,6 +97,7 @@ function PasoQuienSos({ empleados, onElegir }) {
   return (
     <div className="pantalla-centrada">
       <div className="tarjeta">
+        <LogoEmpresa />
         <h1><IconPersonas /> ¿Quién sos?</h1>
         <p className="ayuda">Este es un celular compartido. Elegí tu nombre para continuar.</p>
         <div className="botones-quien-sos">
@@ -116,6 +118,7 @@ function PasoElegirTipo({ onElegir, esSupervisor, onVisita }) {
   return (
     <div className="pantalla-centrada">
       <div className="tarjeta">
+        <LogoEmpresa />
         <h1>{esSupervisor ? 'Registrar visita' : '¿Qué vas a marcar?'}</h1>
         <div className="botones-tipo">
           {esSupervisor ? (

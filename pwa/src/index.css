@@ -79,6 +79,17 @@ textarea {
   .tarjeta { opacity: 0; transform: scale(0.96); }
 }
 
+/* Logo de la empresa (opcional, lo carga RRHH desde el panel). Centrado arriba del
+   título; si no hay logo el componente no renderiza nada y la tarjeta queda igual
+   que siempre. `contain` para que entre cualquier proporción sin recortar. */
+.logo-empresa {
+  display: block;
+  margin: 0 auto 14px;
+  max-width: 130px;
+  max-height: 64px;
+  object-fit: contain;
+}
+
 .tarjeta.resultado { text-align: center; }
 .icono-resultado {
   font-size: 15px;

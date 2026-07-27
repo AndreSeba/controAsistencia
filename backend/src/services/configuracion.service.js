@@ -1,8 +1,10 @@
 const configuracionRepo = require('../repositories/configuracion.repository');
 const auditoriaRepo = require('../repositories/auditoria.repository');
+const almacenamientoService = require('./almacenamiento.service');
 
 const CLAVE_MARGEN_ANTICIPACION = 'margen_anticipacion_min';
 const CLAVE_PAGO_DIA = 'pago_dia_bs';
+const CLAVE_LOGO = 'logo_url';
 const MARGEN_MAX_MIN = 240; // 4hs: tope sano, evita que un valor absurdo deje todo en revisión
 
 class ConfiguracionError extends Error {
@@ -62,10 +64,56 @@ async function actualizarPagoDiaBs(monto, usuarioId, ip) {
   return monto;
 }
 
+// Logo de la empresa: se guarda solo la URL pública en `configuracion` (clave/valor),
+// el archivo va al mismo bucket que las selfies/fotos de referencia. Sin fila = sin
+// logo cargado, y la UI cae al texto de siempre.
+async function obtenerLogoUrl() {
+  const fila = await configuracionRepo.obtener(CLAVE_LOGO);
+  return fila?.valor || null;
+}
+
+async function actualizarLogo(fotoBuffer, fotoMimetype, usuarioId, ip) {
+  if (!fotoBuffer?.length) throw new ConfiguracionError('archivo de logo requerido');
+
+  const anterior = await obtenerLogoUrl();
+  const logoUrl = await almacenamientoService.guardar('logo', fotoBuffer, fotoMimetype);
+  await configuracionRepo.actualizar(CLAVE_LOGO, logoUrl, usuarioId);
+
+  await auditoriaRepo.registrar({
+    usuarioId,
+    accion: 'actualizar_logo',
+    tabla: 'configuracion',
+    registroId: CLAVE_LOGO,
+    ip,
+    detalle: { anterior, nuevo: logoUrl },
+  });
+
+  return logoUrl;
+}
+
+// Quitar el logo no borra el archivo del bucket (las URLs son opacas y no hay índice
+// navegable) — solo deja de referenciarlo, y la UI vuelve al texto.
+async function quitarLogo(usuarioId, ip) {
+  const anterior = await obtenerLogoUrl();
+  await configuracionRepo.actualizar(CLAVE_LOGO, '', usuarioId);
+
+  await auditoriaRepo.registrar({
+    usuarioId,
+    accion: 'quitar_logo',
+    tabla: 'configuracion',
+    registroId: CLAVE_LOGO,
+    ip,
+    detalle: { anterior },
+  });
+}
+
 module.exports = {
   obtenerMargenAnticipacion,
   actualizarMargenAnticipacion,
   obtenerPagoDiaBs,
   actualizarPagoDiaBs,
+  obtenerLogoUrl,
+  actualizarLogo,
+  quitarLogo,
   ConfiguracionError,
 };
