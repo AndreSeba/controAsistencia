@@ -46,10 +46,19 @@ CREATE INDEX IF NOT EXISTS ix_dispositivo_corp_empleado_empleado
 
 -- Supabase expone PostgREST por default para anon/authenticated en tablas nuevas — cerrar
 -- igual que 008_lock_down_postgrest.sql (el backend conecta como postgres, esto no lo afecta).
+-- El REVOKE va condicionado a que existan esos roles: los crea Supabase, y en un
+-- PostgreSQL local (desarrollo) no están — sin el chequeo, la migración no corre ahí.
 ALTER TABLE dispositivo_corporativo ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON TABLE dispositivo_corporativo FROM anon, authenticated;
 ALTER TABLE dispositivo_corporativo_empleado ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON TABLE dispositivo_corporativo_empleado FROM anon, authenticated;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon')
+       AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+        REVOKE ALL ON TABLE dispositivo_corporativo FROM anon, authenticated;
+        REVOKE ALL ON TABLE dispositivo_corporativo_empleado FROM anon, authenticated;
+    END IF;
+END $$;
 
 -- Permiso de módulo panel (rrhh_admin es el único rol administrativo, ver CLAUDE.md RBAC)
 INSERT INTO rol_permisos (rol_id, modulo, puede_ver, puede_editar)
