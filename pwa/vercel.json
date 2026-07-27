@@ -1,7 +1,7 @@
 {
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "https://controasistencia.onrender.com/api/$1" },
-    { "source": "/uploads/(.*)", "destination": "https://controasistencia.onrender.com/uploads/$1" },
+    { "source": "/api/(.*)", "destination": "https://pizzario-controasistencia.duckdns.org/api/$1" },
+    { "source": "/uploads/(.*)", "destination": "https://pizzario-controasistencia.duckdns.org/uploads/$1" },
     { "source": "/((?!api|uploads).*)", "destination": "/index.html" }
   ]
 }
