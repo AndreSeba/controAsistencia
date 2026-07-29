@@ -51,6 +51,44 @@ async function totpCoincide(secret, token, timestampMs, offsets) {
   }
 }
 
+// El empleado elige Entrada/Salida en la PWA, pero el servidor manda: si lo que pidió
+// no coincide con el estado real de su jornada, se rechaza con un mensaje claro en vez
+// de aceptar en silencio el tipo "correcto" (server-authoritative).
+function verificarTipoSolicitado(tipoSolicitado, tipoReal) {
+  if (!tipoSolicitado || tipoSolicitado === tipoReal) return;
+  const mensaje = tipoReal === 'SALIDA'
+    ? 'Ya tenés una entrada sin cerrar. Marcá salida.'
+    : 'No hay una entrada abierta para marcar salida.';
+  throw new MarcacionError(mensaje, 409);
+}
+
+// El atraso se calcula contra el horario del BLOQUE más cercano del ÁREA del empleado
+// si tiene una asignada. Fallback: turno+bloque más cercano a la hora de llegada, para
+// empleados sin área. Solo lecturas — devuelve null si no se pudo atribuir, sin lanzar:
+// el catálogo vacío únicamente es un error si la marcación termina siendo una ENTRADA,
+// y eso recién se resuelve dentro de la transacción.
+async function resolverAtribucion(empleadoId, timestampUtc) {
+  let turno = null;
+  let bloque = null;
+  const empleado = await empleadosRepo.obtenerPorId(empleadoId);
+  if (empleado?.area_turno_id) {
+    turno = await turnosRepo.obtenerCatalogoPorId(empleado.area_turno_id);
+    if (turno) {
+      bloque = horarioUtil.atribuirBloque(timestampUtc, turno.bloques);
+    }
+  }
+  if (!turno) {
+    const catalogos = await turnosRepo.listarCatalogo();
+    const resultado = horarioUtil.atribuirTurno(timestampUtc, catalogos);
+    if (resultado) {
+      turno = resultado.turno;
+      bloque = resultado.bloque;
+    }
+  }
+  if (!turno || !bloque) return null;
+  return { turno, bloque };
+}
+
 async function registrar({
   empleadoId,
   sucursalId,
@@ -80,93 +118,90 @@ async function registrar({
   const sucursal = await sucursalesService.obtenerOFallar(sucursalId);
   const timestampUtc = offlineMode && timestampOffline ? new Date(timestampOffline) : new Date();
 
+  // ── FASE 1 — validaciones baratas, trabajo pesado y lecturas, SIN sostener la
+  // conexión de la transacción.
+  // El face-match (~3,5s de CPU) y la subida a Storage (red) NO tocan la base, pero
+  // antes corrían con el BEGIN abierto: retenían una conexión ~4s cada marcación. Peor
+  // todavía, varias lecturas de acá (biometría, empleado, catálogo, configuración) usan
+  // el pool, o sea pedían una SEGUNDA conexión sin soltar la primera — con el pool lleno
+  // eso no es lentitud sino un DEADLOCK del que no se sale solo (reproducido: 3
+  // marcaciones concurrentes con pool de 3 quedan colgadas para siempre).
+  // Regla al tocar esto: nada que use getPool() puede correr dentro de la FASE 2.
+  if (!sucursal.totp_secret) {
+    throw new MarcacionError('La sucursal no tiene código QR configurado. Abrí la pantalla de la sucursal una vez para generarlo.', 409);
+  }
+
+  if (offlineMode) {
+    // El timestamp declarado por el cliente solo se acepta dentro de una ventana
+    // razonable: sin esto, una marca "offline" podría fecharse en cualquier momento.
+    const ahoraMs = Date.now();
+    const tsMs = timestampUtc.getTime();
+    if (Number.isNaN(tsMs) || tsMs > ahoraMs + MAX_FUTURO_OFFLINE_MS || tsMs < ahoraMs - MAX_ANTIGUEDAD_OFFLINE_MS) {
+      throw new MarcacionError('Marcación offline con fecha fuera del rango aceptado (máx. 48h)', 422);
+    }
+    if (!(await totpCoincide(sucursal.totp_secret, qrToken, tsMs, TOLERANCIA_OFFLINE_MS))) {
+      throw new MarcacionError('Código QR (TOTP) inválido o expirado', 401);
+    }
+  } else if (!(await totpCoincide(sucursal.totp_secret, qrToken, timestampUtc.getTime(), TOLERANCIA_ONLINE_MS))) {
+    throw new MarcacionError('Código QR inválido o expirado', 401);
+  }
+
+  // Pre-chequeos baratos (liveness vigente + tipo pedido). El veredicto que vale es el
+  // de la FASE 2; adelantarlos acá evita gastar el face-match y una subida a Storage en
+  // los dos errores más comunes — nonce vencido y tocar Entrada teniendo una jornada
+  // abierta (o al revés) —, que si no dejarían una selfie huérfana en el bucket.
+  if (!offlineMode) {
+    await livenessService.validar(livenessNonce, empleadoId);
+  }
+  if (tipoSolicitado) {
+    const abiertaPrevia = await turnosRepo.buscarAbiertaPorEmpleado(empleadoId);
+    verificarTipoSolicitado(tipoSolicitado, abiertaPrevia ? 'SALIDA' : 'ENTRADA');
+  }
+
+  const biometria = await biometriaRepo.buscarActivoPorEmpleado(empleadoId);
+  let faceMatchScore = null;
+  let identidadVerificada = false;
+  if (biometria) {
+    const template = cifradoService.descifrar(biometria.face_template_cifrado);
+    const comparacion = await faceMatchService.comparar(selfieBuffer, template);
+    faceMatchScore = comparacion.score;
+    identidadVerificada = comparacion.match;
+  }
+
+  const dentroGeocerca = geocercaUtil.dentroDeGeocerca(
+    gpsLat, gpsLng, sucursal.geo_lat, sucursal.geo_lng, sucursal.geo_radio_m
+  );
+
+  const atribucion = await resolverAtribucion(empleadoId, timestampUtc);
+  const margenAnticipacionMin = await configuracionService.obtenerMargenAnticipacion();
+  const selfieUrl = await almacenamientoService.guardar('marcaciones', selfieBuffer, selfieMimetype);
+
+  // ── FASE 2 — transacción corta: solo escrituras y las lecturas que tienen que ser
+  // consistentes con ellas. Todas reciben `client`; ninguna usa getPool() (ver arriba).
   const pool = getPool();
   const client = await pool.connect();
   await client.query('BEGIN');
 
   try {
-    // Ambos caminos validan el TOTP contra el secreto de la sucursal, del lado del
-    // servidor. La tabla qr_token quedó obsoleta con el cambio a TOTP (nadie la puebla).
-    if (!sucursal.totp_secret) {
-      throw new MarcacionError('La sucursal no tiene código QR configurado. Abrí la pantalla de la sucursal una vez para generarlo.', 409);
-    }
-
-    if (offlineMode) {
-      // El timestamp declarado por el cliente solo se acepta dentro de una ventana
-      // razonable: sin esto, una marca "offline" podría fecharse en cualquier momento.
-      const ahoraMs = Date.now();
-      const tsMs = timestampUtc.getTime();
-      if (Number.isNaN(tsMs) || tsMs > ahoraMs + MAX_FUTURO_OFFLINE_MS || tsMs < ahoraMs - MAX_ANTIGUEDAD_OFFLINE_MS) {
-        throw new MarcacionError('Marcación offline con fecha fuera del rango aceptado (máx. 48h)', 422);
-      }
-      if (!(await totpCoincide(sucursal.totp_secret, qrToken, tsMs, TOLERANCIA_OFFLINE_MS))) {
-        throw new MarcacionError('Código QR (TOTP) inválido o expirado', 401);
-      }
-    } else if (!(await totpCoincide(sucursal.totp_secret, qrToken, timestampUtc.getTime(), TOLERANCIA_ONLINE_MS))) {
-      throw new MarcacionError('Código QR inválido o expirado', 401);
-    }
-
     let liveness = { livenessOk: false, livenessRetoId: null };
     if (!offlineMode) {
       liveness = await livenessService.validarYConsumir(livenessNonce, empleadoId, client);
     }
 
-    const biometria = await biometriaRepo.buscarActivoPorEmpleado(empleadoId);
-    let faceMatchScore = null;
-    let identidadVerificada = false;
-    if (biometria) {
-      const template = cifradoService.descifrar(biometria.face_template_cifrado);
-      const comparacion = await faceMatchService.comparar(selfieBuffer, template);
-      faceMatchScore = comparacion.score;
-      identidadVerificada = comparacion.match;
-    }
-
-    const dentroGeocerca = geocercaUtil.dentroDeGeocerca(
-      gpsLat, gpsLng, sucursal.geo_lat, sucursal.geo_lng, sucursal.geo_radio_m
-    );
-
     const jornadaAbierta = await turnosRepo.buscarAbiertaPorEmpleado(empleadoId, client);
     const tipo = jornadaAbierta ? 'SALIDA' : 'ENTRADA';
-
-    // El empleado elige Entrada/Salida en la PWA, pero el servidor manda: si lo que
-    // pidió no coincide con el estado real de su jornada, se rechaza con un mensaje
-    // claro en vez de aceptar en silencio el tipo "correcto" (server-authoritative).
-    if (tipoSolicitado && tipoSolicitado !== tipo) {
-      const mensaje = tipo === 'SALIDA'
-        ? 'Ya tenés una entrada sin cerrar. Marcá salida.'
-        : 'No hay una entrada abierta para marcar salida.';
-      throw new MarcacionError(mensaje, 409);
-    }
+    verificarTipoSolicitado(tipoSolicitado, tipo);
 
     let turnoJornadaId;
     let minutosAtraso = null;
     let minutosAnticipacion = null;
     let aplicaDescuento = true; // default
     if (tipo === 'ENTRADA') {
-      // El atraso se calcula contra el horario del BLOQUE más cercano del ÁREA del
-      // empleado si tiene una asignada. Fallback: turno+bloque más cercano a la
-      // hora de llegada, como antes, para empleados sin área.
-      let turno = null;
-      let bloque = null;
-      const empleado = await empleadosRepo.obtenerPorId(empleadoId);
-      if (empleado?.area_turno_id) {
-        turno = await turnosRepo.obtenerCatalogoPorId(empleado.area_turno_id, client);
-        if (turno) {
-          bloque = horarioUtil.atribuirBloque(timestampUtc, turno.bloques);
-        }
-      }
-      if (!turno) {
-        const catalogos = await turnosRepo.listarCatalogo();
-        const resultado = horarioUtil.atribuirTurno(timestampUtc, catalogos);
-        if (resultado) {
-          turno = resultado.turno;
-          bloque = resultado.bloque;
-        }
-      }
-      if (!turno || !bloque) {
+      if (!atribucion) {
         // Catálogo de turnos vacío: sin esto, turno.id revienta con un 500 sin pista.
         throw new MarcacionError('No hay turnos configurados en el sistema. Avisá a RRHH.', 409);
       }
+      const { turno, bloque } = atribucion;
 
       aplicaDescuento = turno.aplica_descuento !== false;
 
@@ -182,13 +217,10 @@ async function registrar({
       aplicaDescuento = jornadaAbierta.aplica_descuento !== false;
     }
 
-    const selfieUrl = await almacenamientoService.guardar('marcaciones', selfieBuffer, selfieMimetype);
-
     // Señal blanda (P-geocerca/identidad) + P9 (atraso > 60 min) + margen de
     // anticipación configurable: nunca bloquea, solo marca para revisión de RRHH.
     // Offline siempre va a revisión: el timestamp lo declara el cliente y no hubo
     // reto de liveness — confianza reducida por diseño, RRHH la confirma a mano.
-    const margenAnticipacionMin = await configuracionService.obtenerMargenAnticipacion();
     const atrasoExcesivo = minutosAtraso != null && minutosAtraso > UMBRAL_REVISION_ATRASO_MIN;
     const demasiadoTemprano = minutosAnticipacion != null && minutosAnticipacion > margenAnticipacionMin;
     const estado = (offlineMode || !identidadVerificada || !dentroGeocerca || atrasoExcesivo || demasiadoTemprano)
@@ -234,10 +266,18 @@ async function registrar({
     }
 
     if (tipo === 'SALIDA') {
+      // El flag de la jornada tiene que reflejar la jornada COMPLETA, no solo la salida.
+      // Antes se calculaba con el `estado` de ESTA marcación, así que una ENTRADA con
+      // atraso excesivo (o identidad no verificada) dejaba la jornada SIN marcar si la
+      // salida salía limpia — RRHH no la veía en el KPI del dashboard, solo filtrando en
+      // Marcaciones. Caso real detectado el 2026-07-28: entrada con 116 min de atraso y
+      // salida normal → jornada quedaba en requiere_revision = false.
+      // La consulta ve la SALIDA recién insertada: corre dentro de la misma transacción.
+      const requiereRevision = await marcacionesRepo.existeRequiereRevisionEnJornada(turnoJornadaId, client);
       await turnosRepo.cerrar(turnoJornadaId, {
         salidaMarcada: true,
         cierreAutomatico: false,
-        requiereRevision: estado === 'requiere_revision',
+        requiereRevision,
       }, client);
     }
 

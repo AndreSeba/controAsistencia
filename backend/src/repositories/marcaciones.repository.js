@@ -89,6 +89,20 @@ async function marcarRevisado(id, usuarioId, executor = getPool()) {
   return result.rows[0];
 }
 
+// ¿Alguna marcación de esta jornada quedó marcada para revisión? Se usa al cerrar la
+// jornada: el flag de turno_jornada tiene que reflejar la jornada COMPLETA (entrada y
+// salida), no solo la marcación que la cierra.
+async function existeRequiereRevisionEnJornada(turnoJornadaId, executor = getPool()) {
+  const result = await executor.query(
+    `SELECT EXISTS (
+       SELECT 1 FROM marcacion
+       WHERE turno_jornada_id = $1 AND estado = 'requiere_revision'
+     ) AS hay`,
+    [turnoJornadaId]
+  );
+  return result.rows[0].hay;
+}
+
 async function obtenerRankingAtrasos(fechaInicio, fechaFin) {
   const pool = getPool();
   
@@ -173,4 +187,7 @@ async function asistenciaSemanal({ fechaInicio, fechaFin, sucursalId, turnoId, e
   return result.rows;
 }
 
-module.exports = { crear, listar, obtenerPorId, marcarRevisado, obtenerRankingAtrasos, asistenciaSemanal };
+module.exports = {
+  crear, listar, obtenerPorId, marcarRevisado, existeRequiereRevisionEnJornada,
+  obtenerRankingAtrasos, asistenciaSemanal,
+};

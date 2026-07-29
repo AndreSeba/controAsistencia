@@ -21,6 +21,11 @@ function getPool() {
     pool = new Pool({
       connectionString,
       ssl: requiereSsl(connectionString) ? { rejectUnauthorized: false } : false,
+      // Red de seguridad: el default de pg es 0 = esperar una conexión libre PARA
+      // SIEMPRE. Si el pool se saturara, las requests quedaban colgadas sin timeout y
+      // el empleado veía "Registrando tu marcación…" eternamente (y reintentaba, lo que
+      // lo empeora). Con esto falla en 10s con un error claro, recuperable.
+      connectionTimeoutMillis: 10000,
     });
   }
   return pool;
