@@ -24,6 +24,7 @@ function Empleados() {
   const [nuevaFechaIngreso, setNuevaFechaIngreso] = useState('');
   const [nuevaFechaRetiro, setNuevaFechaRetiro] = useState('');
   const [idCopiado, setIdCopiado] = useState(null);
+  const [avisoCopiado, setAvisoCopiado] = useState(false);
   const [enlaceManual, setEnlaceManual] = useState(null); // { empleadoId, url } — fallback si el navegador bloquea el portapapeles
   const fotoInputRef = useRef(null);
   const [empleadoBiometriaId, setEmpleadoBiometriaId] = useState(null);
@@ -184,6 +185,8 @@ function Empleados() {
       await navigator.clipboard.writeText(url);
       setIdCopiado(empleadoId);
       setTimeout(() => setIdCopiado(null), 2000);
+      setAvisoCopiado(true);
+      setTimeout(() => setAvisoCopiado(false), 2000);
     } catch {
       setEnlaceManual({ empleadoId, url });
     }
@@ -253,6 +256,11 @@ function Empleados() {
 
   return (
     <div className="page">
+      {avisoCopiado && (
+        <div className="aviso-centro-overlay">
+          <div className="aviso-centro">Link copiado exitosamente</div>
+        </div>
+      )}
       <h1>Personal</h1>
       {error && <p className="error">{error}</p>}
       {enlaceManual && (

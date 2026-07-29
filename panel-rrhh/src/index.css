@@ -449,6 +449,31 @@ input:focus-visible, select:focus-visible {
 .enlace-copiable { display: flex; align-items: center; gap: 6px; }
 .enlace-copiado { color: var(--text-muted); font-size: 13px; }
 
+.aviso-centro-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  pointer-events: none;
+}
+.aviso-centro {
+  background: var(--accent);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 600;
+  padding: 20px 36px;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 180ms ease-out, transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@starting-style {
+  .aviso-centro { opacity: 0; transform: scale(0.9); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   button, .topbar nav a, input, select, .tabla tr, .error, .aviso, .tarjetas-turno .card,
   .modal-overlay, .modal-contenido, .modal-caja, .login-form, .kpi-card, .ap-card,
