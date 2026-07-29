@@ -3,6 +3,7 @@ import { Route, Routes } from 'react-router-dom';
 import ConfigurarDispositivo from './pages/ConfigurarDispositivo';
 import Marcar from './pages/Marcar';
 import Pantalla from './pages/Pantalla';
+import AvisoInstalarIOS from './components/AvisoInstalarIOS';
 import { guardarDeviceToken, obtenerDeviceToken } from './lib/dispositivoStore';
 import { request } from './lib/api';
 
@@ -34,8 +35,14 @@ function InicioEmpleado() {
   }, []);
 
   if (deviceToken === undefined) return null;
-  if (!deviceToken) return <ConfigurarDispositivo onConfigurado={setDeviceToken} errorInicial={errorActivacion} />;
-  return <Marcar deviceToken={deviceToken} />;
+  return (
+    <>
+      <AvisoInstalarIOS />
+      {!deviceToken
+        ? <ConfigurarDispositivo onConfigurado={setDeviceToken} errorInicial={errorActivacion} />
+        : <Marcar deviceToken={deviceToken} />}
+    </>
+  );
 }
 
 function App() {
