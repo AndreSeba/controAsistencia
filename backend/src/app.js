@@ -19,6 +19,16 @@ const dispositivosCorporativosRoutes = require('./routes/dispositivosCorporativo
 
 const app = express();
 
+// Detrás de Nginx (VPS) el socket de cada request es siempre 127.0.0.1 — sin esto,
+// req.ip es localhost para TODO el mundo: el rate limit de abajo se vuelve un cupo
+// GLOBAL compartido entre todos los usuarios a la vez (429 colectivo en un cambio de
+// turno) y la auditoría guarda 127.0.0.1 en vez de la IP real. "1" = confiar solo en
+// el primer proxy (el Nginx propio, que setea X-Forwarded-For) — nunca `true`, que
+// confiaría en cualquier cadena y dejaría a un cliente directo falsificar su IP
+// mandando su propio header. En dev (sin proxy) no cambia nada: sin X-Forwarded-For,
+// req.ip sigue siendo la dirección del socket.
+app.set('trust proxy', 1);
+
 app.use(helmet());
 
 // Lista explícita de orígenes permitidos — nunca reflejar "true" junto con credentials:
