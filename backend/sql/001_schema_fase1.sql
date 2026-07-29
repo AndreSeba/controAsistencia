@@ -218,16 +218,18 @@ INSERT INTO roles (nombre, descripcion) VALUES
     ('rrhh_admin', 'Único rol administrativo: enrolamiento, geocerca, revisión, descuentos')
 ON CONFLICT (nombre) DO NOTHING;
 
--- No usar ON CONFLICT (nombre): desde 015_nombre_area_unico_activo.sql el UNIQUE plano
--- de nombre fue reemplazado por un índice parcial (solo activo = TRUE), y ON CONFLICT
--- exige un arbiter que matchee exactamente — con el índice parcial ya no hay ninguno
--- para la columna sola, así que esta migración fallaba entera al re-correrse sobre una
--- base ya migrada ("no unique or exclusion constraint matching the ON CONFLICT
--- specification"). NOT EXISTS es idempotente sin depender de qué constraint exista.
+-- Seed de MAÑANA/TARDE: solo para instalación NUEVA (tabla vacía), nunca más.
+-- Antes chequeaba NOT EXISTS por nombre, pero eso reinsertaba MAÑANA/TARDE cada vez
+-- que se re-corría `npm run migrate` (pasa siempre que se agrega una migración nueva)
+-- si RRHH ya había renombrado esas filas al crear áreas propias (P10) — el nombre
+-- "TARDE" quedaba libre y el seed lo recreaba de cero, generando una fila fantasma
+-- duplicada en producción (detectado 2026-07-27). Chequear que la tabla esté
+-- completamente vacía es la única condición que representa "instalación nueva" de
+-- verdad, sin depender de qué nombres existan en ese momento.
 INSERT INTO turno_catalogo (nombre, hora_inicio, hora_fin)
 SELECT v.nombre, v.hora_inicio, v.hora_fin
 FROM (VALUES
     ('MAÑANA', TIME '11:00', TIME '15:00'),
     ('TARDE', TIME '15:00', TIME '23:00')
 ) AS v(nombre, hora_inicio, hora_fin)
-WHERE NOT EXISTS (SELECT 1 FROM turno_catalogo t WHERE t.nombre = v.nombre);
+WHERE NOT EXISTS (SELECT 1 FROM turno_catalogo);

@@ -1,0 +1,11 @@
+-- 022_totp_secret.sql
+-- Agrega la columna `totp_secret` a `sucursal` (secreto Base32 para el QR dinámico
+-- offline, ver CLAUDE.md "QR dinámico (Modo Offline / TOTP)"). Esta columna existe en
+-- producción (Supabase) desde la Fase 2.5 ("Modo Offline Invencible"), pero se agregó
+-- ahí a mano en su momento y nunca quedó capturada en ninguna migración versionada —
+-- detectado 2026-07-27 al intentar crear una sucursal nueva contra una base de dev
+-- limpia (armada solo con `npm run migrate:local`): `sucursales.repository.js` inserta
+-- siempre un valor generado en `crear()`, así que sin esta columna el INSERT falla con
+-- "no existe la columna «totp_secret»". Idempotente: en producción no hace nada (la
+-- columna ya existe); en cualquier base nueva la deja lista.
+ALTER TABLE sucursal ADD COLUMN IF NOT EXISTS totp_secret VARCHAR(64);
