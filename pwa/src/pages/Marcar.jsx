@@ -1,13 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import jsQR from 'jsqr';
 import { useCamara } from '../lib/useCamara';
-import { request, ApiError } from '../lib/api';
+import { request, ApiError, esErrorDeRed } from '../lib/api';
 import { obtenerUbicacion } from '../lib/geolocalizacion';
 import { guardarMarcacionOffline, sincronizarPendientes } from '../lib/offlineSync';
 import { IconEntrada, IconSalida, IconVisita, IconVolver, IconPersonas } from '../components/Icons';
 import LogoEmpresa from '../components/LogoEmpresa';
 
 const SEGUNDOS_PARA_CAPTURAR = 3;
+// La selfie se reduce antes de subirla: el motor de face-match detecta con inputSize 320,
+// así que 640px de ancho le sobran, y el backend deja de decodificar imágenes de 8-12MP a
+// píxeles crudos (causa del OOM/502 del 2026-07-25). También mantiene el consumo de
+// Supabase Storage dentro del plan gratuito con el volumen del piloto.
+const ANCHO_MAX_SELFIE = 640;
+const CALIDAD_JPEG_SELFIE = 0.75;
 
 function PasoEscaneo({ onDetectado }) {
   const { videoRef, listo, error } = useCamara('environment');
@@ -64,8 +70,8 @@ function PasoSelfie({ onCapturada }) {
           clearInterval(intervalo);
           if (!yaCapturadaRef.current) {
             yaCapturadaRef.current = true;
-            const canvas = capturarFrame();
-            canvas?.toBlob((blob) => onCapturada(blob), 'image/jpeg', 0.85);
+            const canvas = capturarFrame(ANCHO_MAX_SELFIE);
+            canvas?.toBlob((blob) => onCapturada(blob), 'image/jpeg', CALIDAD_JPEG_SELFIE);
           }
           return 0;
         }
@@ -236,7 +242,7 @@ function Marcar({ deviceToken }) {
       setReto(nuevoReto);
       setPaso('reto');
     } catch (err) {
-      if (!navigator.onLine || err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+      if (esErrorDeRed(err)) {
         // Modo offline
         setReto({ nonce: 'offline-' + Date.now() });
         setPaso('reto');
@@ -254,6 +260,10 @@ function Marcar({ deviceToken }) {
       return;
     }
     setPaso('enviando');
+    // Fuera del try: el catch de red lo reusa para encolar offline el MISMO payload
+    // (incluido el GPS ya capturado) — antes armaba uno nuevo sin GPS y esas marcaciones
+    // llegaban como "fuera de geocerca", inflando la cola de revisión de RRHH al pedo.
+    let payload = null;
     try {
       // Capturamos ubicación (podría fallar sin internet, pero el navegador la cachea a veces)
       let ubicacion = { lat: null, lng: null, precisionM: null };
@@ -262,8 +272,8 @@ function Marcar({ deviceToken }) {
       } catch (e) {
         // Seguimos sin ubicación si falla
       }
-      
-      const payload = {
+
+      payload = {
         selfieBlob,
         sucursalId: qrDetectado.sucursalId,
         qrToken: qrDetectado.token,
@@ -306,10 +316,11 @@ function Marcar({ deviceToken }) {
       setResultado(marcacion);
       setPaso('resultado');
     } catch (err) {
-      if (!navigator.onLine || err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-        // Guardar offline si falla la red al enviar
+      if (esErrorDeRed(err)) {
+        // Guardar offline si falla la red al enviar — con el payload completo (GPS
+        // incluido); el fallback sin ?? es solo por si el error saltó antes de armarlo.
         try {
-          await guardarMarcacionOffline({
+          await guardarMarcacionOffline(payload ?? {
             selfieBlob,
             sucursalId: qrDetectado.sucursalId,
             qrToken: qrDetectado.token,

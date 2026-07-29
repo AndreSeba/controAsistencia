@@ -13,6 +13,15 @@ function useCamara(facingMode) {
     setListo(false);
     setError(null);
 
+    // En contexto NO seguro (http:// por IP, no localhost) el navegador ni define
+    // navigator.mediaDevices — sin este chequeo, el .getUserMedia() de abajo lanza un
+    // TypeError SÍNCRONO que el .catch() no agarra, el error escapa del efecto y React
+    // desmonta el árbol entero: pantalla en negro sin ningún mensaje.
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError('La cámara necesita una conexión segura (HTTPS). Abrí la app desde el enlace oficial.');
+      return;
+    }
+
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode }, audio: false })
       .then((stream) => {
@@ -38,12 +47,20 @@ function useCamara(facingMode) {
     };
   }, [facingMode]);
 
-  function capturarFrame() {
+  // maxAncho (opcional) reduce la imagen proporcionalmente antes de dibujarla. La cámara
+  // del celular entrega mucha más resolución de la que el reconocimiento facial necesita
+  // (el detector corre con inputSize 320), así que esa resolución de más no aporta nada:
+  // solo pesa en Storage y, sobre todo, en la RAM del backend, que decodifica la imagen a
+  // píxeles crudos para face-api — una 4000x3000 son ~48MB de RGBA y fue la causa del
+  // OOM/502 del 2026-07-25. Sin maxAncho se captura a resolución nativa (el escaneo de QR
+  // arma su propio canvas aparte y no pasa por acá: ahí más resolución sí ayuda).
+  function capturarFrame(maxAncho) {
     const video = videoRef.current;
     if (!video || video.videoWidth === 0) return null;
+    const escala = maxAncho && video.videoWidth > maxAncho ? maxAncho / video.videoWidth : 1;
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = Math.round(video.videoWidth * escala);
+    canvas.height = Math.round(video.videoHeight * escala);
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     return canvas;

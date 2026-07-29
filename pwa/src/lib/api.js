@@ -27,4 +27,14 @@ async function request(path, { method = 'GET', body, deviceToken, isFormData = f
   return res.json();
 }
 
-export { request, ApiError };
+// ¿La request falló por RED (nunca llegó al servidor) y no por un rechazo del backend?
+// fetch rechaza con TypeError en ese caso, pero el TEXTO del mensaje varía por navegador:
+// Chrome "Failed to fetch", Safari/iOS "Load failed", Firefox "NetworkError when
+// attempting...". Comparar strings (como se hacía antes) dejaba a los iPhone afuera —
+// con wifi malo mostraban error en vez de guardar la marcación offline. El TIPO del
+// error es la señal estable; un ApiError (respuesta HTTP real) nunca es TypeError.
+function esErrorDeRed(err) {
+  return !navigator.onLine || err instanceof TypeError;
+}
+
+export { request, ApiError, esErrorDeRed };
