@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "npm --prefix backend run dev",
+    "dev:local": "npm --prefix backend run dev:local",
+    "start:local": "npm --prefix backend run start:local",
     "dev:web": "npm --prefix panel-rrhh run dev",
     "dev:pwa": "npm --prefix pwa run dev",
     "migrate": "npm --prefix backend run migrate",

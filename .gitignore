@@ -5,3 +5,7 @@ node_modules/
 dist/
 *.log
 CLAUDE.md
+VPS-PRODUCCION.md
+# Salida del script de reintentos de Oracle Cloud (intento abandonado): es un
+# resultado de corrida, no configuración.
+deploy/oracle/resultado.json

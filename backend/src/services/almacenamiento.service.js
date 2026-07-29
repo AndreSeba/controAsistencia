@@ -1,7 +1,11 @@
 const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 
-const BUCKET = 'uploads';
+// Configurable por env var: dev usa un bucket aparte (SUPABASE_BUCKET=uploads-dev) para
+// que las fotos de prueba no se mezclen con las reales de producción, aunque ambas
+// apunten al mismo proyecto de Supabase (la base de datos ya está separada por completo,
+// pero el Storage se comparte salvo que se indique lo contrario acá).
+const BUCKET = process.env.SUPABASE_BUCKET || 'uploads';
 
 let cliente = null;
 function supabase() {

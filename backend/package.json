@@ -10,6 +10,7 @@
     "dev": "node --watch-path=./src --env-file=.env src/server.js",
     "dev:local": "node --watch-path=./src --env-file=.env.dev src/server.js",
     "start": "node --env-file=.env src/server.js",
+    "start:local": "node --env-file=.env.dev src/server.js",
     "migrate": "node --env-file=.env scripts/migrate.js",
     "migrate:local": "node --env-file=.env.dev scripts/migrate.js",
     "seed:admin": "node --env-file=.env scripts/seed-admin.js",
