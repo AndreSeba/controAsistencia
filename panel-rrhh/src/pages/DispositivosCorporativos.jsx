@@ -25,7 +25,6 @@ function DispositivosCorporativos() {
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [nuevaSucursalId, setNuevaSucursalId] = useState('');
   const [sucursalReasignar, setSucursalReasignar] = useState('');
-  const [tokenEmitido, setTokenEmitido] = useState(null);
   const [idCopiado, setIdCopiado] = useState(null);
   const [enlaceManual, setEnlaceManual] = useState(null); // { id, url } — fallback si el navegador bloquea el portapapeles
   const [guardando, setGuardando] = useState(false);
@@ -62,20 +61,37 @@ function DispositivosCorporativos() {
     setModalAbierto('crear');
   }
 
+  // Copia el link al portapapeles; si el navegador la rechaza (pestaña sin foco,
+  // contexto no seguro, permiso denegado), en vez de fallar en silencio mostramos el
+  // enlace para copiarlo a mano. El device_token NUNCA se muestra crudo en pantalla —
+  // mismo criterio que Empleados.jsx (2026-07-28): antes "Nuevo dispositivo corporativo"
+  // mostraba el token en una banda de texto plano ("transmitir por canal seguro"), que
+  // es justo lo que esa banda pedía no hacer al mostrarlo en la propia pantalla.
+  async function copiarAlPortapapeles(id, url) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setIdCopiado(id);
+      setTimeout(() => setIdCopiado(null), 2000);
+    } catch {
+      setEnlaceManual({ id, url });
+    }
+  }
+
   async function crear(e) {
     e.preventDefault();
     if (guardandoRef.current) return;
     guardandoRef.current = true;
     setError(null);
+    setEnlaceManual(null);
     setGuardando(true);
     try {
       const resultado = await request('/dispositivos-corporativos', {
         method: 'POST',
         body: { nombre: nuevoNombre, sucursalId: Number(nuevaSucursalId) },
       });
-      setTokenEmitido(resultado.deviceToken);
       setModalAbierto(null);
-      cargar();
+      await cargar();
+      await copiarAlPortapapeles(resultado.id, urlActivacion(resultado.deviceToken));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -89,17 +105,7 @@ function DispositivosCorporativos() {
     setEnlaceManual(null);
     try {
       const { deviceToken } = await request(`/dispositivos-corporativos/${dispositivo.id}/enlace`);
-      const url = urlActivacion(deviceToken);
-      try {
-        await navigator.clipboard.writeText(url);
-        setIdCopiado(dispositivo.id);
-        setTimeout(() => setIdCopiado(null), 2000);
-      } catch {
-        // El navegador puede rechazar la copia automática (pestaña sin foco, contexto
-        // no seguro, permiso denegado) — en vez de fallar en silencio, mostramos el
-        // enlace para copiarlo a mano.
-        setEnlaceManual({ id: dispositivo.id, url });
-      }
+      await copiarAlPortapapeles(dispositivo.id, urlActivacion(deviceToken));
     } catch (err) {
       setError(err.message);
     }
@@ -203,12 +209,6 @@ function DispositivosCorporativos() {
         verificando con selfie y reconocimiento facial — no es un camino sin cámara.
       </p>
       {error && <p className="error">{error}</p>}
-      {tokenEmitido && (
-        <p className="aviso">
-          Código de activación (transmitir por canal seguro, no se volverá a mostrar):{' '}
-          <code>{tokenEmitido}</code>
-        </p>
-      )}
       {enlaceManual && (
         <p className="aviso">
           No se pudo copiar automáticamente. Enlace (seleccioná y copiá a mano): <code>{enlaceManual.url}</code>
