@@ -7,7 +7,7 @@ import { guardarMarcacionOffline, sincronizarPendientes } from '../lib/offlineSy
 import { IconEntrada, IconSalida, IconVisita, IconVolver, IconPersonas } from '../components/Icons';
 import LogoEmpresa from '../components/LogoEmpresa';
 
-const SEGUNDOS_PARA_CAPTURAR = 3;
+const SEGUNDOS_PARA_CAPTURAR = 5; // 3s resultaba muy poco tiempo para acomodarse (2026-07-29)
 // La selfie se reduce antes de subirla: el motor de face-match detecta con inputSize 320,
 // así que 640px de ancho le sobran, y el backend deja de decodificar imágenes de 8-12MP a
 // píxeles crudos (causa del OOM/502 del 2026-07-25). También mantiene el consumo de
