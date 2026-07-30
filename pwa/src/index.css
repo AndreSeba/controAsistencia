@@ -52,6 +52,39 @@ textarea {
   resize: vertical;
 }
 
+/* Único <input> de texto en la PWA hoy (CI de la auto-activación) — sin esto usaba el
+   estilo nativo del navegador: fondo claro y, por ser `required`, un borde rojizo de
+   ":invalid" apenas se renderiza vacío, antes de que el usuario haya hecho nada. */
+input[type='text'],
+input[type='number'],
+input[type='tel'] {
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: #e5e9f0;
+  font-size: 16px;
+  margin-bottom: 16px;
+}
+input[type='text']::placeholder,
+input[type='number']::placeholder,
+input[type='tel']::placeholder {
+  color: var(--text-muted);
+}
+input[type='text']:focus,
+input[type='number']:focus,
+input[type='tel']:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+/* Neutraliza el borde rojo nativo de :invalid — la validación real la hace el submit
+   del form (required + el mensaje de error propio), no un color de fondo del navegador. */
+input:invalid {
+  box-shadow: none;
+}
+
 .error { color: var(--error); margin: 8px 0 16px; text-align: center; }
 .ayuda { color: var(--text-muted); font-size: 14px; text-align: center; margin: 8px 0 16px; }
 
