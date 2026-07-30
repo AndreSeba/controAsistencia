@@ -169,7 +169,7 @@ async function registrar({
   }
 
   const dentroGeocerca = geocercaUtil.dentroDeGeocerca(
-    gpsLat, gpsLng, sucursal.geo_lat, sucursal.geo_lng, sucursal.geo_radio_m
+    gpsLat, gpsLng, sucursal.geo_lat, sucursal.geo_lng, sucursal.geo_radio_m, gpsPrecisionM
   );
 
   const atribucion = await resolverAtribucion(empleadoId, timestampUtc);
