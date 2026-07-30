@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
-import { urlActivacion } from '../lib/urlPantalla';
+import { urlAutoActivacion } from '../lib/urlPantalla';
 import { redimensionarFoto } from '../lib/redimensionarFoto';
 import { usePaginacion } from '../hooks/usePaginacion';
 import Paginacion from '../components/Paginacion';
-import { IconGuardar, IconCrear, IconEditar, IconCancelar, IconCopiar, IconDispositivo, IconCamara } from '../components/Icons';
+import { IconGuardar, IconCrear, IconEditar, IconCancelar, IconCopiar, IconCamara } from '../components/Icons';
 
 function Empleados() {
   const { request } = useAuth();
@@ -23,9 +23,8 @@ function Empleados() {
   const [nuevoEsSupervisor, setNuevoEsSupervisor] = useState(false);
   const [nuevaFechaIngreso, setNuevaFechaIngreso] = useState('');
   const [nuevaFechaRetiro, setNuevaFechaRetiro] = useState('');
-  const [idCopiado, setIdCopiado] = useState(null);
   const [avisoCopiado, setAvisoCopiado] = useState(false);
-  const [enlaceManual, setEnlaceManual] = useState(null); // { empleadoId, url } — fallback si el navegador bloquea el portapapeles
+  const [enlaceManual, setEnlaceManual] = useState(null); // string — fallback si el navegador bloquea el portapapeles
   const fotoInputRef = useRef(null);
   const [empleadoBiometriaId, setEmpleadoBiometriaId] = useState(null);
   const [busqueda, setBusqueda] = useState('');
@@ -176,42 +175,25 @@ function Empleados() {
     }
   }
 
-  // Copia el link al portapapeles; si el navegador la rechaza (pestaña sin foco,
-  // contexto no seguro, permiso denegado), en vez de fallar en silencio mostramos el
-  // enlace para copiarlo a mano. Compartido por enrolar (primera vez) y "Copiar
-  // enlace" (reenvío) — las dos terminan en lo mismo: un link listo para mandar.
-  async function copiarAlPortapapeles(empleadoId, url) {
+  // Auto-activación (2026-07-29): un solo link, la raíz de la PWA, igual para todo el
+  // personal — el empleado se identifica con su CI + selfie ahí adentro (comparada
+  // contra la biometría que RRHH ya enroló). Reemplaza "Enrolar dispositivo"/"Copiar
+  // enlace" por fila: esos dos quedaron retirados del panel porque un solo clic de más
+  // en "Copiar enlace" para alguien que YA tenía dispositivo activo generaba un segundo
+  // link válido para el MISMO device_token — dos teléfonos distintos podían terminar
+  // marcando como la misma persona (detectado 2026-07-29, ver CLAUDE.md). El enlace de
+  // invitación individual (?token=) sigue existiendo en el backend sin cambios — los que
+  // ya se repartieron por WhatsApp no se rompen — solo se sacó el botón que lo generaba.
+  async function copiarEnlaceGenerico() {
+    setError(null);
+    setEnlaceManual(null);
+    const url = urlAutoActivacion();
     try {
       await navigator.clipboard.writeText(url);
-      setIdCopiado(empleadoId);
-      setTimeout(() => setIdCopiado(null), 2000);
       setAvisoCopiado(true);
       setTimeout(() => setAvisoCopiado(false), 2000);
     } catch {
-      setEnlaceManual({ empleadoId, url });
-    }
-  }
-
-  async function enrolarDispositivo(empleadoId) {
-    setError(null);
-    setEnlaceManual(null);
-    try {
-      const resultado = await request(`/empleados/${empleadoId}/dispositivo`, { method: 'POST' });
-      await copiarAlPortapapeles(empleadoId, urlActivacion(resultado.activacionToken));
-      cargar();
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  async function copiarEnlace(empleadoId) {
-    setError(null);
-    setEnlaceManual(null);
-    try {
-      const { activacionToken } = await request(`/empleados/${empleadoId}/dispositivo/enlace`);
-      await copiarAlPortapapeles(empleadoId, urlActivacion(activacionToken));
-    } catch (err) {
-      setError(err.message);
+      setEnlaceManual(url);
     }
   }
 
@@ -265,10 +247,23 @@ function Empleados() {
       {error && <p className="error">{error}</p>}
       {enlaceManual && (
         <p className="aviso">
-          No se pudo copiar automáticamente. Enlace para el personal #{enlaceManual.empleadoId}
-          (seleccioná y copiá a mano): <code>{enlaceManual.url}</code>
+          No se pudo copiar automáticamente. Enlace de activación (seleccioná y copiá a
+          mano): <code>{enlaceManual}</code>
         </p>
       )}
+
+      <button
+        type="button"
+        className="boton-enlace-generico"
+        onClick={copiarEnlaceGenerico}
+      >
+        <IconCopiar /> Copiar enlace de activación del personal
+      </button>
+      <p className="ayuda">
+        Un solo enlace para todos — cada persona se identifica con su CI y una foto al
+        abrirlo por primera vez. Pegalo en un cartel o en el grupo de WhatsApp; no hace
+        falta uno distinto por empleado.
+      </p>
 
       <div className="barra-acciones">
         <button type="button" className="boton-nuevo boton-icono" title="Agregar personal" aria-label="Agregar personal" onClick={abrirCrear}><IconCrear /></button>
@@ -315,14 +310,8 @@ function Empleados() {
               <td data-label="Dispositivo">{emp.dispositivo_id ? 'Activo' : 'Sin enrolar'}</td>
               <td data-label="Biometría">{emp.biometria_id ? 'Activa' : 'Sin enrolar'}</td>
               <td className="celda-acciones">
-                {emp.dispositivo_id ? (
-                  <>
-                    <button type="button" onClick={() => copiarEnlace(emp.id)}><IconCopiar /> Copiar enlace</button>
-                    {idCopiado === emp.id && <span className="enlace-copiado">Copiado ✓</span>}
-                    <button type="button" onClick={() => setDispositivoARevocar({ empleadoId: emp.id, dispositivoId: emp.dispositivo_id, nombreCompleto: `${emp.nombre} ${emp.apellido}` })}><IconCancelar /> Revocar dispositivo</button>
-                  </>
-                ) : (
-                  <button type="button" onClick={() => enrolarDispositivo(emp.id)}><IconDispositivo /> Enrolar dispositivo</button>
+                {emp.dispositivo_id && (
+                  <button type="button" onClick={() => setDispositivoARevocar({ empleadoId: emp.id, dispositivoId: emp.dispositivo_id, nombreCompleto: `${emp.nombre} ${emp.apellido}` })}><IconCancelar /> Revocar dispositivo</button>
                 )}
                 <button type="button" onClick={() => abrirSelectorFoto(emp.id)}>
                   <IconCamara /> {emp.biometria_id ? 'Re-enrolar biometría' : 'Enrolar biometría'}

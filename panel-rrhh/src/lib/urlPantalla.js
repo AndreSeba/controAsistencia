@@ -15,8 +15,19 @@ function urlPantalla(sucursalId, pantallaToken) {
 
 // Enlace de activación del empleado: lleva el device_token en la URL, así la PWA lo
 // configura sola al abrirlo — si el empleado lo pierde, RRHH reenvía el mismo link.
+// Sigue existiendo para el dispositivo corporativo (P16), que usa el mismo patrón con el
+// device_token del celular compartido — no se toca ni se reemplaza (ver "No romper los
+// enlaces" en CLAUDE.md).
 function urlActivacion(deviceToken) {
   return `${basePwa()}/?token=${deviceToken}`;
 }
 
-export { urlPantalla, urlActivacion };
+// Enlace de auto-activación (2026-07-29): la raíz de la PWA, sin ningún token — es la
+// MISMA URL para todo el personal, no hay nada individual que generar. El empleado se
+// identifica con su CI + selfie ahí adentro. RRHH copia esto una sola vez (para un
+// cartel, el grupo de WhatsApp) en vez de un link por persona.
+function urlAutoActivacion() {
+  return `${basePwa()}/`;
+}
+
+export { urlPantalla, urlActivacion, urlAutoActivacion };

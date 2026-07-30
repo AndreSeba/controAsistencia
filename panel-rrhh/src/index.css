@@ -391,6 +391,19 @@ input:focus-visible, select:focus-visible {
 
 .boton-nuevo { margin-bottom: 16px; }
 
+/* Acción principal de "Personal": un solo enlace de activación para todo el personal
+   (2026-07-29) — fondo sólido en vez del borde+relleno claro del botón default, para que
+   destaque como la acción de arriba de la página, no una más entre las de la tabla. */
+.boton-enlace-generico {
+  background: var(--accent);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 10px 18px;
+  margin-bottom: 4px;
+}
+.boton-enlace-generico:hover { background: var(--brand); }
+
 .modal-overlay {
   position: fixed;
   inset: 0;
