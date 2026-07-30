@@ -28,6 +28,17 @@ async function buscarPorDocumento(documentoNro, executor = getPool()) {
   return result.rows[0] || null;
 }
 
+// Para la auto-activación (CI + selfie): a diferencia de buscarPorDocumento (que no
+// filtra por estado y se usa para detectar duplicados en alta/edición), acá solo un
+// empleado ACTIVO puede auto-activarse.
+async function buscarActivoPorDocumento(documentoNro, executor = getPool()) {
+  const result = await executor.query(
+    "SELECT id FROM empleado WHERE documento_nro = $1 AND estado = 'activo'",
+    [documentoNro]
+  );
+  return result.rows[0] || null;
+}
+
 async function listar(incluirInactivos) {
   const pool = getPool();
   const where = incluirInactivos ? '' : "WHERE e.estado = 'activo'";
@@ -61,4 +72,4 @@ async function obtenerPorId(id, executor = getPool()) {
   return result.rows[0] || null;
 }
 
-module.exports = { crear, actualizar, buscarPorDocumento, listar, obtenerPorId };
+module.exports = { crear, actualizar, buscarPorDocumento, buscarActivoPorDocumento, listar, obtenerPorId };

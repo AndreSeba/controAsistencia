@@ -111,6 +111,24 @@ async function activarDispositivo(req, res, next) {
   }
 }
 
+// PWA: auto-activación con link genérico (CI + selfie comparada contra la biometría ya
+// enrolada). Sin JWT ni device_token — es, junto con activarDispositivo, el otro camino
+// para conseguir uno.
+async function autoActivarDispositivo(req, res, next) {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'selfie (campo "selfie") es requerida' });
+    const { documentoNro } = req.body;
+    const resultado = await dispositivosService.autoActivar({
+      documentoNro,
+      selfieBuffer: req.file.buffer,
+      ip: req.ip,
+    });
+    res.json(resultado);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function enrolarBiometria(req, res, next) {
   try {
     if (!req.file) return res.status(400).json({ error: 'foto es requerida (multipart, campo "foto")' });
@@ -137,5 +155,6 @@ module.exports = {
   obtenerEnlaceDispositivo,
   revocarDispositivo,
   activarDispositivo,
+  autoActivarDispositivo,
   enrolarBiometria,
 };

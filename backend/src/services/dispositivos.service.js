@@ -2,7 +2,11 @@ const crypto = require('crypto');
 
 const dispositivosRepo = require('../repositories/dispositivos.repository');
 const dispositivosCorpRepo = require('../repositories/dispositivosCorporativos.repository');
+const empleadosRepo = require('../repositories/empleados.repository');
 const empleadosService = require('./empleados.service');
+const biometriaRepo = require('../repositories/biometria.repository');
+const cifradoService = require('./cifrado.service');
+const faceMatchService = require('./faceMatch.service');
 const auditoriaRepo = require('../repositories/auditoria.repository');
 
 class DispositivoError extends Error {
@@ -101,6 +105,85 @@ async function activarPorToken(activacionToken) {
   );
 }
 
+// Mismo mensaje SIEMPRE, para los 4 motivos de rechazo (CI inexistente, ya tiene
+// dispositivo, sin biometría, cara no coincide) — nunca distinguir cuál fue: si no, el
+// endpoint se vuelve una forma de averiguar qué CIs son válidos o de tantear el
+// face-match. El motivo real solo queda en `auditoria`, para RRHH, nunca en la respuesta.
+const RECHAZO_GENERICO = 'No pudimos verificar tu identidad con esos datos. Pedí a RRHH que te ayude a activar el dispositivo.';
+
+async function registrarIntentoAutoActivacion({ empleadoId, documentoNro, ip, exito, motivo, score, dispositivoId }) {
+  await auditoriaRepo.registrar({
+    usuarioId: null, // no hay usuario de RRHH autenticado: el propio empleado, sin sesión
+    accion: 'autoactivar_dispositivo',
+    tabla: 'dispositivo_empleado',
+    registroId: dispositivoId ?? empleadoId ?? 0,
+    ip,
+    detalle: {
+      documentoNro,
+      empleadoId: empleadoId ?? null,
+      exito,
+      motivo,
+      score: score != null ? Number(score.toFixed(4)) : null,
+    },
+  });
+}
+
+// Auto-activación con link genérico: CI + selfie comparada contra la biometría YA
+// enrolada por RRHH, vía el mismo motor de face-match real que usa cada marcación —
+// no es una barrera nueva y más floja, es la misma en la que el sistema ya confía a
+// diario, aplicada una vez para vincular el teléfono en vez de en cada marca (ver
+// CLAUDE.md, "Auto-activación con link genérico + CI + selfie"). Reabre P4 parcialmente:
+// solo cubre el caso feliz (empleado activo, con biometría, cara coincide) — para
+// cualquier otro caso (sin biometría, ya tiene dispositivo, disputa) sigue haciendo
+// falta RRHH vía el enlace de invitación de siempre, que esto no reemplaza.
+async function autoActivar({ documentoNro, selfieBuffer, ip }) {
+  if (!documentoNro?.trim()) throw new DispositivoError('El número de CI es requerido');
+  if (!selfieBuffer?.length) throw new DispositivoError('La selfie es requerida');
+  const doc = documentoNro.trim();
+
+  const empleado = await empleadosRepo.buscarActivoPorDocumento(doc);
+  if (!empleado) {
+    await registrarIntentoAutoActivacion({ empleadoId: null, documentoNro: doc, ip, exito: false, motivo: 'ci_no_encontrado' });
+    throw new DispositivoError(RECHAZO_GENERICO, 401);
+  }
+
+  // Bloquea "robar" el lugar de otro: si ya hay un dispositivo activo, la re-activación
+  // por pérdida sigue siendo manual vía RRHH (revocar + reenrolar), como hoy.
+  const yaActivo = await dispositivosRepo.buscarActivoPorEmpleado(empleado.id);
+  if (yaActivo) {
+    await registrarIntentoAutoActivacion({ empleadoId: empleado.id, documentoNro: doc, ip, exito: false, motivo: 'ya_tiene_dispositivo' });
+    throw new DispositivoError(RECHAZO_GENERICO, 401);
+  }
+
+  const biometria = await biometriaRepo.buscarActivoPorEmpleado(empleado.id);
+  if (!biometria) {
+    await registrarIntentoAutoActivacion({ empleadoId: empleado.id, documentoNro: doc, ip, exito: false, motivo: 'sin_biometria' });
+    throw new DispositivoError(RECHAZO_GENERICO, 401);
+  }
+
+  const template = cifradoService.descifrar(biometria.face_template_cifrado);
+  const comparacion = await faceMatchService.comparar(selfieBuffer, template);
+  if (!comparacion.match) {
+    await registrarIntentoAutoActivacion({ empleadoId: empleado.id, documentoNro: doc, ip, exito: false, motivo: 'no_coincide', score: comparacion.score });
+    throw new DispositivoError(RECHAZO_GENERICO, 401);
+  }
+
+  // La selfie de verificación NUNCA se sube a Storage (ni en éxito ni en fallo, decisión
+  // explícita del usuario 2026-07-29) — comparar() ya trabajó en memoria; acá no hay
+  // ninguna llamada a almacenamientoService, a propósito. Solo persiste el resultado.
+  const deviceToken = crypto.randomBytes(32).toString('hex');
+  const creado = await dispositivosRepo.crear({
+    empleadoId: empleado.id, deviceToken, activacionToken: null, aprobadoPorRrhh: null,
+  });
+
+  await registrarIntentoAutoActivacion({
+    empleadoId: empleado.id, documentoNro: doc, ip, exito: true, motivo: 'autoactivado',
+    score: comparacion.score, dispositivoId: creado.id,
+  });
+
+  return { deviceToken };
+}
+
 async function revocar(dispositivoId, empleadoId, usuarioId, ip) {
   const activo = await dispositivosRepo.buscarActivoPorEmpleado(empleadoId);
   if (!activo || activo.id !== dispositivoId) {
@@ -118,4 +201,4 @@ async function revocar(dispositivoId, empleadoId, usuarioId, ip) {
   });
 }
 
-module.exports = { enrolar, revocar, obtenerEnlace, activarPorToken, DispositivoError };
+module.exports = { enrolar, revocar, obtenerEnlace, activarPorToken, autoActivar, DispositivoError };
