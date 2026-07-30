@@ -3,55 +3,26 @@ import { useAuth } from '../lib/AuthContext';
 import { descargarBlob } from '../lib/api';
 import { usePaginacion } from '../hooks/usePaginacion';
 import Paginacion from '../components/Paginacion';
-import { IconGuardar, IconDescargar } from '../components/Icons';
+import { IconGuardar, IconDescargar, IconActualizar, IconCancelar } from '../components/Icons';
 
-const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-
-function periodoActual() {
-  const hoy = new Date();
-  return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
-}
-
-// ── Quincenas de pago: 28 (mes anterior) → 13, y 14 → 27 ───
-// Una quincena se identifica por {anio, mes, mitad}: mitad 1 termina el 13 de
-// ese mes (arranca el 28 del anterior), mitad 2 va del 14 al 27 del mes.
+// ── Filtro por rango libre (2026-07-30, reabre P12 parcialmente) ───
+// Las quincenas fijas 28→13 / 14→27 se sacaron del panel: el cliente corta sus
+// planillas manualmente en las fechas que él decide, así que la página entera
+// (planilla + detalle + Excel) se filtra por UN solo rango desde/hasta. Los
+// descuentos ya se calculaban día a día en el backend (nacen con cada entrada
+// tarde) — la quincena era solo la agrupación visual, por eso esto es un cambio
+// de filtros, no de cálculo.
 const pad2 = (n) => String(n).padStart(2, '0');
 
-function quincenaActual() {
-  const hoy = new Date();
-  const d = hoy.getDate(), m = hoy.getMonth() + 1, a = hoy.getFullYear();
-  if (d >= 28) return m === 12 ? { anio: a + 1, mes: 1, mitad: 1 } : { anio: a, mes: m + 1, mitad: 1 };
-  if (d <= 13) return { anio: a, mes: m, mitad: 1 };
-  return { anio: a, mes: m, mitad: 2 };
+function hoyISO() {
+  const h = new Date();
+  return `${h.getFullYear()}-${pad2(h.getMonth() + 1)}-${pad2(h.getDate())}`;
 }
 
-function rangoQuincena({ anio, mes, mitad }) {
-  if (mitad === 1) {
-    const pm = mes === 1 ? 12 : mes - 1;
-    const pa = mes === 1 ? anio - 1 : anio;
-    return { inicio: `${pa}-${pad2(pm)}-28`, fin: `${anio}-${pad2(mes)}-13` };
-  }
-  return { inicio: `${anio}-${pad2(mes)}-14`, fin: `${anio}-${pad2(mes)}-27` };
+function inicioMesISO() {
+  const h = new Date();
+  return `${h.getFullYear()}-${pad2(h.getMonth() + 1)}-01`;
 }
-
-function etiquetaQuincena(q) {
-  if (q.mitad === 1) {
-    const pm = q.mes === 1 ? 12 : q.mes - 1;
-    return `28 ${MESES[pm - 1].slice(0, 3)} – 13 ${MESES[q.mes - 1].slice(0, 3)} ${q.anio}`;
-  }
-  return `14 – 27 ${MESES[q.mes - 1].slice(0, 3)} ${q.anio}`;
-}
-
-function navQuincena(q, delta) {
-  if (delta > 0) {
-    if (q.mitad === 1) return { ...q, mitad: 2 };
-    return q.mes === 12 ? { anio: q.anio + 1, mes: 1, mitad: 1 } : { anio: q.anio, mes: q.mes + 1, mitad: 1 };
-  }
-  if (q.mitad === 2) return { ...q, mitad: 1 };
-  return q.mes === 1 ? { anio: q.anio - 1, mes: 12, mitad: 2 } : { anio: q.anio, mes: q.mes - 1, mitad: 2 };
-}
-
-const mismaQuincena = (a, b) => a.anio === b.anio && a.mes === b.mes && a.mitad === b.mitad;
 
 // ── Sección de tarifas ─────────────────────────────────────
 function TarifasAtraso({ request }) {
@@ -160,30 +131,40 @@ function TarifasAtraso({ request }) {
   );
 }
 
+const RANGO_DEFAULT = { inicio: inicioMesISO(), fin: hoyISO() };
+
 function Descuentos() {
   const { request } = useAuth();
-  const [periodo, setPeriodo] = useState(periodoActual());
-  const [fechaDia, setFechaDia] = useState(''); // '' = todo el mes; con valor filtra ese día
+  // Dos juegos de fechas a propósito: los inputs (borrador) se editan libremente sin
+  // disparar nada; "Aplicar filtro" recién ahí copia el borrador al rango aplicado, que
+  // es el único que dispara la consulta. Antes cada tecleo/cambio de fecha re-consultaba
+  // sola — molesto al elegir un rango largo, y el usuario pidió botones explícitos.
+  const [inicioInput, setInicioInput] = useState(RANGO_DEFAULT.inicio);
+  const [finInput, setFinInput] = useState(RANGO_DEFAULT.fin);
+  const [fechaInicio, setFechaInicio] = useState(RANGO_DEFAULT.inicio);
+  const [fechaFin, setFechaFin] = useState(RANGO_DEFAULT.fin);
   const [descuentos, setDescuentos] = useState([]);
-  const [quincena, setQuincena] = useState(quincenaActual());
   const [planilla, setPlanilla] = useState({ pagoDiaBs: 10, filas: [] });
   const [error, setError] = useState(null);
   const [busqueda, setBusqueda] = useState('');
 
-  const [anio, mes] = periodo.split('-').map(Number);
-  const hoy = periodoActual();
-  const esMesActual = periodo === hoy;
+  const inputValido = Boolean(inicioInput && finInput && inicioInput <= finInput);
+  // Solo se consulta con un rango completo y coherente; mientras el usuario está a
+  // mitad de editar una fecha (o las cruzó), se deja la última carga en pantalla.
+  const rangoValido = Boolean(fechaInicio && fechaFin && fechaInicio <= fechaFin);
 
-  function navMes(delta) {
-    let nm = mes + delta, na = anio;
-    if (nm > 12) { nm = 1; na++; }
-    if (nm < 1)  { nm = 12; na--; }
-    setPeriodo(`${na}-${String(nm).padStart(2, '0')}`);
-    setFechaDia('');
+  function aplicarFiltro() {
+    if (!inputValido) return;
+    setFechaInicio(inicioInput);
+    setFechaFin(finInput);
   }
 
-  // El filtro que manda: día exacto si está elegido, si no el mes.
-  const filtroFechaQuery = fechaDia ? `fecha=${fechaDia}` : `periodo=${periodo}`;
+  function limpiarFiltro() {
+    setInicioInput(RANGO_DEFAULT.inicio);
+    setFinInput(RANGO_DEFAULT.fin);
+    setFechaInicio(RANGO_DEFAULT.inicio);
+    setFechaFin(RANGO_DEFAULT.fin);
+  }
 
   const planillaFiltrada = planilla.filas.filter(f => {
     if (!busqueda) return true;
@@ -202,35 +183,27 @@ function Descuentos() {
   const { datosPaginados: repPaginados, paginaActiva: repPag, totalPaginas: repTotal, irPaginaSiguiente: repSig, irPaginaAnterior: repAnt, setPagina: setRepPag } = usePaginacion(planillaFiltrada, 10);
   const { datosPaginados: descPaginados, paginaActiva: descPag, totalPaginas: descTotal, irPaginaSiguiente: descSig, irPaginaAnterior: descAnt, setPagina: setDescPag } = usePaginacion(descuentosFiltrados, 10);
 
-  const rango = rangoQuincena(quincena);
+  const rangoQuery = `fechaInicio=${fechaInicio}&fechaFin=${fechaFin}`;
 
-  async function cargarDescuentos() {
-    try {
-      setDescuentos(await request(`/descuentos?${filtroFechaQuery}`));
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  async function cargarPlanilla() {
-    try {
-      setPlanilla(await request(`/descuentos/planilla?fechaInicio=${rango.inicio}&fechaFin=${rango.fin}`));
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- recarga al cambiar filtros, no sincronización de UI
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- recarga al cambiar el rango, no sincronización de UI
   useEffect(() => {
-    cargarDescuentos();
-    setDescPag(1);
-  }, [periodo, fechaDia]);
-
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- recarga al cambiar quincena
-  useEffect(() => {
-    cargarPlanilla();
-    setRepPag(1);
-  }, [quincena.anio, quincena.mes, quincena.mitad]);
+    if (!rangoValido) return;
+    (async () => {
+      try {
+        setError(null);
+        const [listaDescuentos, datosPlanilla] = await Promise.all([
+          request(`/descuentos?${rangoQuery}`),
+          request(`/descuentos/planilla?${rangoQuery}`),
+        ]);
+        setDescuentos(listaDescuentos);
+        setPlanilla(datosPlanilla);
+        setDescPag(1);
+        setRepPag(1);
+      } catch (err) {
+        setError(err.message);
+      }
+    })();
+  }, [fechaInicio, fechaFin]);
 
   const totales = planillaFiltrada.reduce(
     (acc, f) => ({
@@ -245,8 +218,8 @@ function Descuentos() {
   async function descargarExcel() {
     setError(null);
     try {
-      const blob = await request(`/descuentos/planilla/export?fechaInicio=${rango.inicio}&fechaFin=${rango.fin}`, { comoBlob: true });
-      descargarBlob(blob, `planilla-${rango.inicio}-a-${rango.fin}.xlsx`);
+      const blob = await request(`/descuentos/planilla/export?${rangoQuery}`, { comoBlob: true });
+      descargarBlob(blob, `planilla-${fechaInicio}-a-${fechaFin}.xlsx`);
     } catch (err) {
       setError(err.message);
     }
@@ -271,42 +244,35 @@ function Descuentos() {
             setDescPag(1);
           }}
         />
-        <div className="mes-nav">
-          <button type="button" onClick={() => navMes(-1)}>◀</button>
-          <span className="mes-label">{MESES[mes - 1]} {anio}</span>
-          <button type="button" onClick={() => navMes(1)} disabled={esMesActual}>▶</button>
-        </div>
         <label>
-          Día
-          <span className="filtro-dia">
-            <input type="date" value={fechaDia} onChange={(e) => setFechaDia(e.target.value)} />
-            {fechaDia && (
-              <button type="button" className="btn-limpiar-dia" onClick={() => setFechaDia('')} title="Ver todo el mes">✕</button>
-            )}
-          </span>
+          Desde
+          <input type="date" value={inicioInput} max={finInput || undefined} onChange={(e) => setInicioInput(e.target.value)} />
         </label>
+        <label>
+          Hasta
+          <input type="date" value={finInput} min={inicioInput || undefined} onChange={(e) => setFinInput(e.target.value)} />
+        </label>
+        <button type="button" onClick={aplicarFiltro} disabled={!inputValido}>
+          <IconActualizar /> Aplicar filtro
+        </button>
+        <button type="button" onClick={limpiarFiltro}>
+          <IconCancelar /> Limpiar
+        </button>
       </div>
+      {!inputValido && <p className="ayuda">Elegí un rango válido (desde ≤ hasta) antes de aplicar.</p>}
 
       <div className="card">
         <div className="planilla-header">
-          <h2>Planilla quincenal</h2>
-          <div className="mes-nav">
-            <button type="button" onClick={() => setQuincena(navQuincena(quincena, -1))}>◀</button>
-            <span className="mes-label">{etiquetaQuincena(quincena)}</span>
-            <button
-              type="button"
-              onClick={() => setQuincena(navQuincena(quincena, 1))}
-              disabled={mismaQuincena(quincena, quincenaActual())}
-            >▶</button>
-          </div>
+          <h2>Planilla de pago</h2>
+          <span className="mes-label">{fechaInicio} → {fechaFin}</span>
         </div>
         <p className="subtitulo" style={{ marginTop: 0 }}>
           Cada día trabajado paga {planilla.pagoDiaBs} Bs, llegue tarde o temprano.
-          Total = ganado − descuentos por atraso de la quincena.
+          Total = ganado − descuentos por atraso del período elegido.
         </p>
         <button type="button" onClick={descargarExcel} disabled={planilla.filas.length === 0}><IconDescargar /> Descargar Excel</button>
         {planilla.filas.length === 0 ? (
-          <p className="ayuda">Sin actividad en esta quincena.</p>
+          <p className="ayuda">Sin actividad en este período.</p>
         ) : (
           <table className="tabla">
             <thead>
