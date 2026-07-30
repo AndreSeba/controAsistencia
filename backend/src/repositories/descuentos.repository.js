@@ -12,13 +12,18 @@ async function crear({ marcacionId, empleadoId, montoBs, reglaId, periodo }, exe
   return result.rows[0].id;
 }
 
-async function listar({ periodo, fecha, estado, empleadoId } = {}) {
+async function listar({ periodo, fecha, fechaInicio, fechaFin, estado, empleadoId } = {}) {
   const pool = getPool();
   const condiciones = [];
   const params = [];
   if (periodo) { params.push(periodo); condiciones.push(`d.periodo = $${params.length}`); }
   // Día calendario local (Bolivia, UTC-4) de la marcación que originó el descuento.
   if (fecha) { params.push(fecha); condiciones.push(`(m.timestamp_utc - INTERVAL '4 hours')::date = $${params.length}`); }
+  // Rango libre (2026-07-30): el cliente corta sus planillas en fechas propias, no en
+  // quincenas fijas — el panel ahora filtra todo por rango. periodo/fecha se conservan
+  // por compatibilidad con llamadas existentes.
+  if (fechaInicio) { params.push(fechaInicio); condiciones.push(`(m.timestamp_utc - INTERVAL '4 hours')::date >= $${params.length}`); }
+  if (fechaFin) { params.push(fechaFin); condiciones.push(`(m.timestamp_utc - INTERVAL '4 hours')::date <= $${params.length}`); }
   if (estado) { params.push(estado); condiciones.push(`d.estado = $${params.length}`); }
   if (empleadoId) { params.push(empleadoId); condiciones.push(`d.empleado_id = $${params.length}`); }
   const where = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '';

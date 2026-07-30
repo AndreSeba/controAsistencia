@@ -3,10 +3,12 @@ const exportExcelService = require('../services/exportExcel.service');
 
 async function listar(req, res, next) {
   try {
-    const { periodo, fecha, estado, empleadoId } = req.query;
+    const { periodo, fecha, fechaInicio, fechaFin, estado, empleadoId } = req.query;
     const descuentos = await descuentosService.listar({
       periodo,
       fecha,
+      fechaInicio,
+      fechaFin,
       estado,
       empleadoId: empleadoId ? Number(empleadoId) : undefined,
     });

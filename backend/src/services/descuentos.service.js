@@ -62,6 +62,8 @@ function validarFecha(fecha) {
 
 async function listar(filtros) {
   validarFecha(filtros?.fecha);
+  validarFecha(filtros?.fechaInicio);
+  validarFecha(filtros?.fechaFin);
   return descuentosRepo.listar(filtros);
 }
 
