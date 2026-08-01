@@ -88,6 +88,22 @@ input:invalid {
 .error { color: var(--error); margin: 8px 0 16px; text-align: center; }
 .ayuda { color: var(--text-muted); font-size: 14px; text-align: center; margin: 8px 0 16px; }
 
+/* Aviso de segundo turno pendiente (horario partido). Va destacado a propósito, NO con
+   la clase .ayuda: se muestra justo cuando el empleado se está yendo a almorzar y mira
+   la pantalla un par de segundos — en gris tenue pasaba desapercibido, que es
+   exactamente el olvido que este aviso intenta evitar. */
+.aviso-turno {
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid var(--brand);
+  border-radius: 10px;
+  padding: 14px;
+  margin: 16px 0;
+  text-align: left;
+}
+.aviso-turno strong { display: block; font-size: 16px; margin-bottom: 6px; }
+.aviso-turno .aviso-detalle { font-size: 14px; color: var(--text-muted); }
+.aviso-turno .aviso-hora { color: #e5e9f0; font-weight: 600; }
+
 .pantalla-centrada {
   min-height: 100svh;
   display: flex;

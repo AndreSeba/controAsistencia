@@ -4,6 +4,7 @@ import { useCamara } from '../lib/useCamara';
 import { request, ApiError, esErrorDeRed } from '../lib/api';
 import { obtenerUbicacion } from '../lib/geolocalizacion';
 import { guardarMarcacionOffline, sincronizarPendientes } from '../lib/offlineSync';
+import * as turnoPendiente from '../lib/turnoPendiente';
 import { IconEntrada, IconSalida, IconVisita, IconVolver, IconPersonas } from '../components/Icons';
 import LogoEmpresa from '../components/LogoEmpresa';
 
@@ -123,12 +124,22 @@ function PasoQuienSos({ empleados, onElegir }) {
 // que su área esté configurada como "solo entrada" (propuesta 2026-07-30, Áreas y
 // horarios): ahí no se muestra Salida — la jornada ya se cierra sola en el servidor
 // apenas se marca la Entrada, así que no hay nada que "salir" de todos modos.
-function PasoElegirTipo({ onElegir, esSupervisor, onVisita, requiereSalida }) {
+function PasoElegirTipo({ onElegir, esSupervisor, onVisita, requiereSalida, horaTurnoPendiente }) {
   return (
     <div className="pantalla-centrada">
       <div className="tarjeta">
         <LogoEmpresa />
         <h1>{esSupervisor ? 'Registrar visita' : '¿Qué vas a marcar?'}</h1>
+        {/* Se muestra si hoy salió del primer bloque y todavía no volvió a marcar: sin
+            esto la pantalla son dos botones iguales, sin ninguna pista de cuál le toca. */}
+        {horaTurnoPendiente && !esSupervisor && (
+          <div className="aviso-turno">
+            <strong>Te falta tu segundo turno de hoy</strong>
+            <p className="aviso-detalle">
+              Tu horario sigue a las <span className="aviso-hora">{horaTurnoPendiente.slice(0, 5)}</span> — marcá tu Entrada.
+            </p>
+          </div>
+        )}
         <div className="botones-tipo">
           {esSupervisor ? (
             <button type="button" className="boton-visita" onClick={onVisita}><IconVisita /> Registrar visita a sucursal</button>
@@ -156,6 +167,7 @@ function Marcar({ deviceToken }) {
   const [compartido, setCompartido] = useState(false);
   const [empleadosDisponibles, setEmpleadosDisponibles] = useState([]);
   const [empleadoId, setEmpleadoId] = useState(null); // solo se usa (y se manda al backend) en un dispositivo compartido
+  const [horaTurnoPendiente, setHoraTurnoPendiente] = useState(null); // horario partido: 2do bloque sin marcar hoy
 
   // Saber si el token es de un dispositivo personal (empleado ya identificado por el
   // device_token, como siempre) o de un celular corporativo compartido (varios
@@ -172,16 +184,23 @@ function Marcar({ deviceToken }) {
         } else {
           setEsSupervisor(yo.esSupervisor === true);
           setRequiereSalida(yo.requiereSalida !== false);
+          setHoraTurnoPendiente(turnoPendiente.obtener(null));
           setPaso('elegirTipo');
         }
       })
-      .catch(() => setPaso('elegirTipo'));
+      .catch(() => {
+        setHoraTurnoPendiente(turnoPendiente.obtener(null));
+        setPaso('elegirTipo');
+      });
   }, [deviceToken]);
 
   function manejarQuienSos(empleado) {
     setEmpleadoId(empleado.id);
     setEsSupervisor(empleado.esSupervisor === true);
     setRequiereSalida(empleado.requiereSalida !== false);
+    // El pendiente se guarda por empleado: en un celular compartido, el de uno no le
+    // puede aparecer al siguiente que agarra el teléfono.
+    setHoraTurnoPendiente(turnoPendiente.obtener(empleado.id));
     setPaso('elegirTipo');
   }
 
@@ -319,6 +338,17 @@ function Marcar({ deviceToken }) {
         body: formData,
         isFormData: true,
       });
+      // Recordatorio de horario partido: la Salida del primer bloque lo deja pendiente,
+      // y volver a marcar Entrada lo cancela. El servidor decide si corresponde (mira los
+      // bloques del área); acá solo se persiste para poder mostrarlo si reabre la app.
+      const claveEmpleado = compartido ? empleadoId : null;
+      if (marcacion.segundoBloquePendienteHoy) {
+        turnoPendiente.guardar(claveEmpleado, marcacion.horaBloqueDos);
+        setHoraTurnoPendiente(marcacion.horaBloqueDos);
+      } else if (marcacion.tipo === 'ENTRADA') {
+        turnoPendiente.limpiar(claveEmpleado);
+        setHoraTurnoPendiente(null);
+      }
       setResultado(marcacion);
       setPaso('resultado');
     } catch (err) {
@@ -379,6 +409,7 @@ function Marcar({ deviceToken }) {
         esSupervisor={esSupervisor}
         onVisita={() => setPaso('escaneandoVisita')}
         requiereSalida={requiereSalida}
+        horaTurnoPendiente={horaTurnoPendiente}
       />
     );
   }
@@ -432,6 +463,15 @@ function Marcar({ deviceToken }) {
           <p className={`icono-resultado${exito ? '' : ' atencion'}`}>{exito ? 'Listo' : 'Atención'}</p>
           <h1>{resultado.tipo === 'ENTRADA' ? 'Entrada registrada' : 'Salida registrada'}</h1>
           {!exito && <p className="ayuda">Quedó marcada para revisión, pero tu marca ya quedó guardada.</p>}
+          {resultado.segundoBloquePendienteHoy && (
+            <div className="aviso-turno">
+              <strong>Te falta tu segundo turno de hoy</strong>
+              <p className="aviso-detalle">
+                Cuando vuelvas{resultado.horaBloqueDos && <> a las <span className="aviso-hora">{resultado.horaBloqueDos.slice(0, 5)}</span></>},
+                marcá tu Entrada de nuevo. Poné una alarma en tu teléfono para no olvidarte.
+              </p>
+            </div>
+          )}
           {offline && (
              <div style={{ backgroundColor: '#ffcc00', color: '#000', padding: '10px', borderRadius: '5px', marginTop: '10px' }}>
                <p><strong>Estás sin conexión</strong></p>
