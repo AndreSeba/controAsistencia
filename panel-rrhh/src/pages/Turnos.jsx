@@ -75,6 +75,24 @@ function BloqueInputs({ bloques, onChange }) {
   );
 }
 
+// Dos checkboxes atados a UN solo booleano (requiereSalida): marcar "Solo entrada"
+// automáticamente desmarca "Entrada y salida" y viceversa, porque son la misma variable
+// vista desde los dos lados — nunca pueden quedar los dos marcados ni los dos vacíos.
+function RequiereSalidaToggle({ requiereSalida, onChange }) {
+  return (
+    <div className="campo">
+      <label className="campo campo-toggle">
+        <input type="checkbox" checked={!requiereSalida} onChange={() => onChange(false)} />
+        Solo entrada
+      </label>
+      <label className="campo campo-toggle">
+        <input type="checkbox" checked={requiereSalida} onChange={() => onChange(true)} />
+        Entrada y salida
+      </label>
+    </div>
+  );
+}
+
 function formatearBloques(bloques) {
   if (!bloques || bloques.length === 0) return '—';
   return bloques.map((b) => `${b.hora_inicio}–${b.hora_fin}`).join('  /  ');
@@ -89,8 +107,9 @@ function Turnos() {
   const [formBloques, setFormBloques] = useState([{ horaInicio: '', horaFin: '' }]);
   const [formDescuento, setFormDescuento] = useState(true);
   const [formPagoDiario, setFormPagoDiario] = useState(true);
+  const [formRequiereSalida, setFormRequiereSalida] = useState(true);
   const [modalNueva, setModalNueva] = useState(false);
-  const [formNueva, setFormNueva] = useState({ nombre: '', bloques: [{ horaInicio: '', horaFin: '' }], aplicaDescuento: true, aplicaPagoDiario: true });
+  const [formNueva, setFormNueva] = useState({ nombre: '', bloques: [{ horaInicio: '', horaFin: '' }], aplicaDescuento: true, aplicaPagoDiario: true, requiereSalida: true });
   const [errorModal, setErrorModal] = useState(null);
   const [margen, setMargen] = useState('');
   const [pagoDia, setPagoDia] = useState('');
@@ -142,6 +161,7 @@ function Turnos() {
     setFormBloques(bloquesForm.length > 0 ? bloquesForm : [{ horaInicio: '', horaFin: '' }]);
     setFormDescuento(area.aplica_descuento !== false);
     setFormPagoDiario(area.aplica_pago_diario !== false);
+    setFormRequiereSalida(area.requiere_salida !== false);
   }
 
   async function guardar(e) {
@@ -153,7 +173,7 @@ function Turnos() {
     try {
       await request(`/turnos/${editandoId}`, {
         method: 'PUT',
-        body: { nombre: nombreEdit, bloques: formBloques, aplicaDescuento: formDescuento, aplicaPagoDiario: formPagoDiario },
+        body: { nombre: nombreEdit, bloques: formBloques, aplicaDescuento: formDescuento, aplicaPagoDiario: formPagoDiario, requiereSalida: formRequiereSalida },
       });
       setEditandoId(null);
       cargar();
@@ -166,7 +186,7 @@ function Turnos() {
   }
 
   function abrirNueva() {
-    setFormNueva({ nombre: '', bloques: [{ horaInicio: '', horaFin: '' }], aplicaDescuento: true, aplicaPagoDiario: true });
+    setFormNueva({ nombre: '', bloques: [{ horaInicio: '', horaFin: '' }], aplicaDescuento: true, aplicaPagoDiario: true, requiereSalida: true });
     setErrorModal(null);
     setModalNueva(true);
   }
@@ -272,13 +292,14 @@ function Turnos() {
 
       <table className="tabla">
         <thead>
-          <tr><th>Área</th><th>Horario</th><th>Descuento</th><th>Pago por día</th><th></th></tr>
+          <tr><th>Área</th><th>Horario</th><th>Marca</th><th>Descuento</th><th>Pago por día</th><th></th></tr>
         </thead>
         <tbody>
           {datosPaginados.map((t) => (
             <tr key={t.id}>
               <td>{t.nombre}</td>
               <td>{formatearBloques(t.bloques)}</td>
+              <td>{t.requiere_salida !== false ? 'Entrada y salida' : 'Solo entrada'}</td>
               <td>
                 <span className={`badge ${t.aplica_descuento ? 'badge-activo' : 'badge-inactivo'}`}>
                   {t.aplica_descuento ? 'Sí' : 'No'}
@@ -339,6 +360,8 @@ function Turnos() {
             Aplica pago por día
           </label>
           <span className="ayuda">Desmarcá esto para áreas que no cobran por día trabajado (ej. Administración, sueldo aparte) — no van a aparecer en la Planilla quincenal.</span>
+          <RequiereSalidaToggle requiereSalida={formRequiereSalida} onChange={setFormRequiereSalida} />
+          <span className="ayuda">"Solo entrada" cierra la jornada apenas se marca — el personal de esta área no va a ver el botón de Salida en su celular.</span>
           <button type="submit" className="boton-icono" title="Guardar" aria-label="Guardar" disabled={guardando}><IconGuardar /></button>
           <button type="button" className="boton-icono" title="Cancelar" aria-label="Cancelar" onClick={() => setEditandoId(null)} disabled={guardando}><IconCancelar /></button>
         </form>
@@ -378,6 +401,11 @@ function Turnos() {
             Aplica pago por día
           </label>
           <span className="ayuda">Desmarcá esto para áreas que no cobran por día trabajado (ej. Administración, sueldo aparte) — no van a aparecer en la Planilla quincenal.</span>
+          <RequiereSalidaToggle
+            requiereSalida={formNueva.requiereSalida}
+            onChange={(v) => setFormNueva({ ...formNueva, requiereSalida: v })}
+          />
+          <span className="ayuda">"Solo entrada" cierra la jornada apenas se marca — el personal de esta área no va a ver el botón de Salida en su celular.</span>
           <button type="submit" className="boton-icono" title="Crear" aria-label="Crear" disabled={guardando}><IconCrear /></button>
           <button type="button" className="boton-icono" title="Cancelar" aria-label="Cancelar" onClick={() => setModalNueva(false)} disabled={guardando}><IconCancelar /></button>
         </form>

@@ -119,8 +119,11 @@ function PasoQuienSos({ empleados, onElegir }) {
 }
 
 // El supervisor no marca su propia asistencia (no cobra por día trabajado vía este
-// sistema) — solo ve el botón de visita. El resto del personal ve Entrada/Salida.
-function PasoElegirTipo({ onElegir, esSupervisor, onVisita }) {
+// sistema) — solo ve el botón de visita. El resto del personal ve Entrada/Salida, salvo
+// que su área esté configurada como "solo entrada" (propuesta 2026-07-30, Áreas y
+// horarios): ahí no se muestra Salida — la jornada ya se cierra sola en el servidor
+// apenas se marca la Entrada, así que no hay nada que "salir" de todos modos.
+function PasoElegirTipo({ onElegir, esSupervisor, onVisita, requiereSalida }) {
   return (
     <div className="pantalla-centrada">
       <div className="tarjeta">
@@ -132,7 +135,7 @@ function PasoElegirTipo({ onElegir, esSupervisor, onVisita }) {
           ) : (
             <>
               <button type="button" onClick={() => onElegir('ENTRADA')}><IconEntrada /> Entrada</button>
-              <button type="button" onClick={() => onElegir('SALIDA')}><IconSalida /> Salida</button>
+              {requiereSalida && <button type="button" onClick={() => onElegir('SALIDA')}><IconSalida /> Salida</button>}
             </>
           )}
         </div>
@@ -149,6 +152,7 @@ function Marcar({ deviceToken }) {
   const [resultado, setResultado] = useState(null);
   const [error, setError] = useState(null);
   const [esSupervisor, setEsSupervisor] = useState(false);
+  const [requiereSalida, setRequiereSalida] = useState(true); // default true: si /yo falla (offline), se ve como siempre
   const [compartido, setCompartido] = useState(false);
   const [empleadosDisponibles, setEmpleadosDisponibles] = useState([]);
   const [empleadoId, setEmpleadoId] = useState(null); // solo se usa (y se manda al backend) en un dispositivo compartido
@@ -167,6 +171,7 @@ function Marcar({ deviceToken }) {
           setPaso('quienSos');
         } else {
           setEsSupervisor(yo.esSupervisor === true);
+          setRequiereSalida(yo.requiereSalida !== false);
           setPaso('elegirTipo');
         }
       })
@@ -176,6 +181,7 @@ function Marcar({ deviceToken }) {
   function manejarQuienSos(empleado) {
     setEmpleadoId(empleado.id);
     setEsSupervisor(empleado.esSupervisor === true);
+    setRequiereSalida(empleado.requiereSalida !== false);
     setPaso('elegirTipo');
   }
 
@@ -372,6 +378,7 @@ function Marcar({ deviceToken }) {
         onElegir={manejarTipoElegido}
         esSupervisor={esSupervisor}
         onVisita={() => setPaso('escaneandoVisita')}
+        requiereSalida={requiereSalida}
       />
     );
   }
