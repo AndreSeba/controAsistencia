@@ -265,6 +265,21 @@ async function registrar({
       }, client);
     }
 
+    // Área configurada para marcar SOLO Entrada (propuesta 2026-07-30, reabre P7/P9
+    // parcialmente): la jornada se cierra en el mismo momento de la Entrada, no se
+    // espera al auto-cierre nocturno (P8). Sin esto, cada jornada de estas áreas
+    // quedaría ABIERTA todo el día y el job la cerraría con requiere_revision=true —
+    // inflando la cola de revisión con el comportamiento esperado, no una anomalía.
+    // atraso/descuento/pago por día no cambian: se calculan solo con la Entrada (P7) y
+    // por fecha de jornada, no por si hubo salida.
+    if (tipo === 'ENTRADA' && atribucion.turno.requiere_salida === false) {
+      await turnosRepo.cerrar(turnoJornadaId, {
+        salidaMarcada: false,
+        cierreAutomatico: false,
+        requiereRevision: false,
+      }, client);
+    }
+
     if (tipo === 'SALIDA') {
       // El flag de la jornada tiene que reflejar la jornada COMPLETA, no solo la salida.
       // Antes se calculaba con el `estado` de ESTA marcación, así que una ENTRADA con

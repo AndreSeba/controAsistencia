@@ -63,7 +63,7 @@ async function obtenerPorId(id, executor = getPool()) {
     `SELECT e.id, e.nombre, e.apellido, e.documento_nro, e.estado, e.hrms_ref, e.created_at,
             e.area_turno_id, e.telefono, e.es_supervisor,
             e.fecha_ingreso::text AS fecha_ingreso, e.fecha_retiro::text AS fecha_retiro,
-            tc.nombre AS area_nombre
+            tc.nombre AS area_nombre, tc.requiere_salida
      FROM empleado e
      LEFT JOIN turno_catalogo tc ON tc.id = e.area_turno_id
      WHERE e.id = $1`,

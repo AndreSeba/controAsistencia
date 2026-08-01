@@ -59,10 +59,11 @@ async function revocar(id, executor = getPool()) {
 async function listarEmpleadosHabilitados(dispositivoCorporativoId, executor = getPool()) {
   const result = await executor.query(
     `SELECT dce.id AS habilitacion_id, e.id AS empleado_id, e.nombre, e.apellido, e.es_supervisor,
-            b.foto_referencia_url
+            b.foto_referencia_url, tc.requiere_salida
      FROM dispositivo_corporativo_empleado dce
      JOIN empleado e ON e.id = dce.empleado_id
      LEFT JOIN enrolamiento_biometrico b ON b.empleado_id = e.id AND b.estado = 'activo'
+     LEFT JOIN turno_catalogo tc ON tc.id = e.area_turno_id
      WHERE dce.dispositivo_corporativo_id = $1 AND dce.estado = 'activo' AND e.estado = 'activo'
      ORDER BY e.apellido, e.nombre`,
     [dispositivoCorporativoId]

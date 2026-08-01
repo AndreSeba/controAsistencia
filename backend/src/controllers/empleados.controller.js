@@ -58,11 +58,19 @@ async function yo(req, res, next) {
           apellido: e.apellido,
           esSupervisor: e.es_supervisor === true,
           fotoReferenciaUrl: e.foto_referencia_url,
+          requiereSalida: e.requiere_salida !== false,
         })),
       });
     }
     const emp = await empleadosService.obtenerOFallar(req.dispositivoInfo.empleadoId);
-    res.json({ compartido: false, id: emp.id, nombre: emp.nombre, apellido: emp.apellido, esSupervisor: emp.es_supervisor === true });
+    res.json({
+      compartido: false,
+      id: emp.id,
+      nombre: emp.nombre,
+      apellido: emp.apellido,
+      esSupervisor: emp.es_supervisor === true,
+      requiereSalida: emp.requiere_salida !== false,
+    });
   } catch (err) {
     next(err);
   }
