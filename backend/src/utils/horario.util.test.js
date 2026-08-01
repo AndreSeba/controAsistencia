@@ -5,8 +5,10 @@ const {
   minutosDelDiaLocal,
   fechaLocal,
   atribuirTurno,
+  atribuirBloque,
   calcularMinutosAtraso,
   calcularMinutosAnticipacion,
+  bloquePendienteTrasSalida,
 } = require('./horario.util');
 
 const CATALOGO = [
@@ -51,4 +53,54 @@ test('calcularMinutosAnticipacion solo cuenta si llegó antes del inicio', () =>
   assert.equal(calcularMinutosAnticipacion(new Date('2026-06-20T14:45:00Z'), turno), 15); // 10:45 local, 15min antes
   assert.equal(calcularMinutosAnticipacion(new Date('2026-06-20T15:20:00Z'), turno), null); // llegó después
   assert.equal(calcularMinutosAnticipacion(new Date('2026-06-20T15:00:00Z'), turno), null); // exacto a tiempo, no > 0
+});
+
+// ── bloquePendienteTrasSalida: aviso de segundo turno en horario partido ──────────────
+// Caso real: Administración 08:00-12:00 / 14:30-18:30 (horas locales de Bolivia, UTC-4).
+const BLOQUES_PARTIDO = [
+  { numero_bloque: 1, hora_inicio: '08:00:00', hora_fin: '12:00:00' },
+  { numero_bloque: 2, hora_inicio: '14:30:00', hora_fin: '18:30:00' },
+];
+const BLOQUES_CORRIDO = [{ numero_bloque: 1, hora_inicio: '15:00:00', hora_fin: '23:00:00' }];
+
+test('bloquePendienteTrasSalida avisa cuando la salida del mediodía deja el 2do bloque sin marcar', () => {
+  // 11:50 local: el empleado sale a almorzar, todavía le falta volver 14:30.
+  assert.equal(bloquePendienteTrasSalida(new Date('2026-06-20T15:50:00Z'), BLOQUES_PARTIDO), '14:30:00');
+  // 12:00 local, la salida "de manual" del primer bloque.
+  assert.equal(bloquePendienteTrasSalida(new Date('2026-06-20T16:00:00Z'), BLOQUES_PARTIDO), '14:30:00');
+  // 14:29 local: un minuto antes de que arranque el 2do bloque, sigue pendiente.
+  assert.equal(bloquePendienteTrasSalida(new Date('2026-06-20T18:29:00Z'), BLOQUES_PARTIDO), '14:30:00');
+});
+
+test('bloquePendienteTrasSalida NO avisa una vez arrancado el segundo bloque', () => {
+  // 14:30 local exacto: el 2do bloque ya empezó, esta salida es de ese bloque. Límite
+  // determinista a propósito (< y no <=): a la hora en punto ya no queda nada pendiente.
+  assert.equal(bloquePendienteTrasSalida(new Date('2026-06-20T18:30:00Z'), BLOQUES_PARTIDO), null);
+  // 18:30 local, salida del final de la jornada: no hay tercer bloque.
+  assert.equal(bloquePendienteTrasSalida(new Date('2026-06-20T22:30:00Z'), BLOQUES_PARTIDO), null);
+});
+
+test('bloquePendienteTrasSalida no avisa nunca en un área de horario corrido', () => {
+  // El personal de sucursal (1 solo bloque) no debe ver el aviso a ninguna hora.
+  assert.equal(bloquePendienteTrasSalida(new Date('2026-06-20T15:50:00Z'), BLOQUES_CORRIDO), null);
+  assert.equal(bloquePendienteTrasSalida(new Date('2026-06-20T22:30:00Z'), BLOQUES_CORRIDO), null);
+});
+
+test('bloquePendienteTrasSalida tolera bloques ausentes sin romper', () => {
+  // El empleado puede no tener área asignada (fallback del catálogo) o el área quedar
+  // sin bloques: es un aviso opcional, nunca puede tumbar una marcación.
+  assert.equal(bloquePendienteTrasSalida(new Date('2026-06-20T15:50:00Z'), undefined), null);
+  assert.equal(bloquePendienteTrasSalida(new Date('2026-06-20T15:50:00Z'), null), null);
+  assert.equal(bloquePendienteTrasSalida(new Date('2026-06-20T15:50:00Z'), []), null);
+});
+
+test('bloquePendienteTrasSalida NO reusa atribuirBloque (que elegiría el bloque equivocado)', () => {
+  // Prueba de regresión del bug encontrado al implementarlo: atribuirBloque busca el
+  // hora_inicio más CERCANO, no el bloque que contiene al timestamp. A las 11:50 el
+  // bloque 2 (14:30, a 160 min) está más cerca que el bloque 1 (08:00, a 230 min), así
+  // que atribuirBloque devuelve el 2 — usarlo como criterio silenciaba el aviso justo en
+  // el caso más común (salir a mediodía). Este test falla si alguien vuelve a atarlo ahí.
+  const salidaMediodia = new Date('2026-06-20T15:50:00Z'); // 11:50 local
+  assert.equal(atribuirBloque(salidaMediodia, BLOQUES_PARTIDO).numero_bloque, 2);
+  assert.equal(bloquePendienteTrasSalida(salidaMediodia, BLOQUES_PARTIDO), '14:30:00');
 });

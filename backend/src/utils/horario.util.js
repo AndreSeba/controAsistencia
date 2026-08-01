@@ -87,11 +87,28 @@ function calcularMinutosAnticipacion(timestampUtc, bloque) {
   return diff > 0 ? diff : null;
 }
 
+// Horario partido: dado el momento de una SALIDA, ¿queda todavía un segundo bloque por
+// marcar hoy? Devuelve la hora_inicio del bloque 2 si sí, null si no.
+//
+// NO usa atribuirBloque a propósito: ese elige el bloque con hora_inicio más CERCANA
+// (sirve para el atraso de una entrada), no el bloque que contiene al timestamp. Una
+// salida a las 11:50 de un bloque 08:00-12:00 queda a 160 min del bloque 2 (14:30) y a
+// 230 min del bloque 1 (08:00), así que atribuirBloque la asigna al bloque 2 — que ni
+// empezó. Ese es justo el caso típico (salir a mediodía), así que acá se compara directo
+// contra la hora de inicio del segundo bloque.
+function bloquePendienteTrasSalida(timestampUtc, bloques) {
+  if (!bloques || bloques.length !== 2) return null;
+  const inicioBloqueDos = minutosDeHora(bloques[1].hora_inicio);
+  return minutosDelDiaLocal(timestampUtc) < inicioBloqueDos ? bloques[1].hora_inicio : null;
+}
+
 module.exports = {
   minutosDelDiaLocal,
+  minutosDeHora,
   fechaLocal,
   atribuirTurno,
   atribuirBloque,
   calcularMinutosAtraso,
   calcularMinutosAnticipacion,
+  bloquePendienteTrasSalida,
 };

@@ -296,8 +296,20 @@ async function registrar({
       }, client);
     }
 
+    // Aviso de horario partido (2026-07-31): si esta Salida deja un segundo bloque sin
+    // marcar, la PWA se lo recuerda al empleado — se detectó en producción que el
+    // personal de horario discontinuo a veces olvida volver (solo 2 de las 4 marcaciones
+    // esperadas). Puro aviso informativo: no cambia nada del cálculo de atraso/pago.
+    const horaBloqueDos = tipo === 'SALIDA'
+      ? horarioUtil.bloquePendienteTrasSalida(timestampUtc, atribucion?.turno?.bloques)
+      : null;
+
     await client.query('COMMIT');
-    return marcacion;
+    return {
+      ...marcacion,
+      segundoBloquePendienteHoy: horaBloqueDos != null,
+      horaBloqueDos,
+    };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
