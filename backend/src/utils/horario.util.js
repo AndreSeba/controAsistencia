@@ -20,9 +20,26 @@ function minutosDeHora(horaValue) {
   return h * 60 + m;
 }
 
+// Día de la semana LOCAL (Bolivia), formato ISO: 1=lunes … 7=domingo. Mismo desplazamiento
+// que fechaLocal, pero se necesita el día de semana, no la fecha calendario completa.
+function diaSemanaLocal(timestampUtc) {
+  const local = new Date(timestampUtc.getTime() + OFFSET_BOLIVIA_MIN * 60 * 1000);
+  const diaJs = local.getUTCDay(); // 0=domingo … 6=sábado
+  return diaJs === 0 ? 7 : diaJs;
+}
+
+// `turno_bloque.dias_semana` (default los 7 días, ver 027_bloque_dias_semana.sql) — si un
+// bloque viejo llegara sin el campo (no debería, hay default en la base), se lo trata como
+// "todos los días" para no cambiarle el comportamiento a nadie.
+function bloqueAplicaHoy(timestampUtc, bloque) {
+  const dias = bloque.dias_semana ?? [1, 2, 3, 4, 5, 6, 7];
+  return dias.includes(diaSemanaLocal(timestampUtc));
+}
+
 // Atribución automática (P5): el turno cuyo hora_inicio de algún bloque esté más
-// cercano al timestamp. Devuelve { turno, bloque } — turno es el catálogo, bloque es
-// el bloque específico (con hora_inicio/hora_fin).
+// cercano al timestamp, considerando solo los bloques que aplican HOY (día de la
+// semana). Devuelve { turno, bloque } — turno es el catálogo, bloque es el bloque
+// específico (con hora_inicio/hora_fin).
 function atribuirTurno(timestampUtc, catalogos) {
   const minutosActual = minutosDelDiaLocal(timestampUtc);
   let mejorTurno = null;
@@ -30,7 +47,7 @@ function atribuirTurno(timestampUtc, catalogos) {
   let mejorDistancia = Infinity;
 
   for (const turno of catalogos) {
-    const bloques = turno.bloques || [];
+    const bloques = (turno.bloques || []).filter((b) => bloqueAplicaHoy(timestampUtc, b));
     for (const bloque of bloques) {
       const inicioMin = minutosDeHora(bloque.hora_inicio);
       const distancia = Math.min(
@@ -47,17 +64,21 @@ function atribuirTurno(timestampUtc, catalogos) {
   return mejorTurno ? { turno: mejorTurno, bloque: mejorBloque } : null;
 }
 
-// Dado un turno con bloques, encuentra el bloque más cercano al timestamp.
-// Usado cuando ya sabemos el turno (por área del empleado) y solo queremos el bloque.
+// Dado un turno con bloques, encuentra el bloque más cercano al timestamp entre los que
+// aplican HOY (día de la semana) — ej. Administración lunes a viernes (2 bloques) vs
+// sábado (1 bloque, otro horario). Si ningún bloque del área trabaja hoy (domingo),
+// devuelve null: no es un error, es "no hay turno que atribuir hoy" (ver
+// resolverAtribucion en marcaciones.service.js, que lo trata como señal blanda).
 function atribuirBloque(timestampUtc, bloques) {
-  if (!bloques || bloques.length === 0) return null;
-  if (bloques.length === 1) return bloques[0];
+  const bloquesHoy = (bloques || []).filter((b) => bloqueAplicaHoy(timestampUtc, b));
+  if (bloquesHoy.length === 0) return null;
+  if (bloquesHoy.length === 1) return bloquesHoy[0];
 
   const minutosActual = minutosDelDiaLocal(timestampUtc);
   let mejor = null;
   let mejorDistancia = Infinity;
 
-  for (const bloque of bloques) {
+  for (const bloque of bloquesHoy) {
     const inicioMin = minutosDeHora(bloque.hora_inicio);
     const distancia = Math.min(
       Math.abs(minutosActual - inicioMin),
@@ -88,7 +109,10 @@ function calcularMinutosAnticipacion(timestampUtc, bloque) {
 }
 
 // Horario partido: dado el momento de una SALIDA, ¿queda todavía un segundo bloque por
-// marcar hoy? Devuelve la hora_inicio del bloque 2 si sí, null si no.
+// marcar HOY (día de la semana)? Devuelve la hora_inicio del bloque 2 si sí, null si no.
+// Filtra por día ANTES de contar: un área puede tener más de 2 bloques en total (ej.
+// Administración: 2 entre semana + 1 el sábado) — sin filtrar, `bloques.length` nunca
+// daría 2 y el aviso se apagaría para todos, no solo para el sábado.
 //
 // NO usa atribuirBloque a propósito: ese elige el bloque con hora_inicio más CERCANA
 // (sirve para el atraso de una entrada), no el bloque que contiene al timestamp. Una
@@ -97,15 +121,18 @@ function calcularMinutosAnticipacion(timestampUtc, bloque) {
 // empezó. Ese es justo el caso típico (salir a mediodía), así que acá se compara directo
 // contra la hora de inicio del segundo bloque.
 function bloquePendienteTrasSalida(timestampUtc, bloques) {
-  if (!bloques || bloques.length !== 2) return null;
-  const inicioBloqueDos = minutosDeHora(bloques[1].hora_inicio);
-  return minutosDelDiaLocal(timestampUtc) < inicioBloqueDos ? bloques[1].hora_inicio : null;
+  const bloquesHoy = (bloques || []).filter((b) => bloqueAplicaHoy(timestampUtc, b));
+  if (bloquesHoy.length !== 2) return null;
+  const inicioBloqueDos = minutosDeHora(bloquesHoy[1].hora_inicio);
+  return minutosDelDiaLocal(timestampUtc) < inicioBloqueDos ? bloquesHoy[1].hora_inicio : null;
 }
 
 module.exports = {
   minutosDelDiaLocal,
   minutosDeHora,
   fechaLocal,
+  diaSemanaLocal,
+  bloqueAplicaHoy,
   atribuirTurno,
   atribuirBloque,
   calcularMinutosAtraso,

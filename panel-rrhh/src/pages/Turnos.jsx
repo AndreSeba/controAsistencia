@@ -8,31 +8,99 @@ import { IconGuardar, IconCrear, IconEditar, IconEliminar, IconCancelar, IconCam
 import { redimensionarFoto } from '../lib/redimensionarFoto';
 
 const BLOQUE_VACIO = { horaInicio: '', horaFin: '' };
+const DIAS_SEMANA = [
+  { valor: 1, corta: 'L', nombre: 'Lunes' },
+  { valor: 2, corta: 'M', nombre: 'Martes' },
+  { valor: 3, corta: 'X', nombre: 'Miércoles' },
+  { valor: 4, corta: 'J', nombre: 'Jueves' },
+  { valor: 5, corta: 'V', nombre: 'Viernes' },
+  { valor: 6, corta: 'S', nombre: 'Sábado' },
+  { valor: 7, corta: 'D', nombre: 'Domingo' },
+];
+const TODOS_LOS_DIAS = DIAS_SEMANA.map((d) => d.valor);
 
-// Un área tiene 1 bloque (horario corrido) o 2 (con corte al mediodía, p.ej.
-// Administración 08:00-12:00 / 14:30-18:30). El checkbox "Horario discontinuo"
-// revela directamente los 2 pares de campos — más claro para RRHH que un botón
-// genérico de "agregar bloque" que no explica para qué sirve.
-function BloqueInputs({ bloques, onChange }) {
-  const discontinuo = bloques.length > 1;
+function nuevoGrupoVacio() {
+  return { dias: [1, 2, 3, 4, 5], bloques: [{ ...BLOQUE_VACIO }] };
+}
+
+function mismosDias(a, b) {
+  return a.length === b.length && a.every((d) => b.includes(d));
+}
+
+// El backend no sabe nada de "grupos" — solo recibe un array plano de bloques, cada uno
+// con sus propios horaInicio/horaFin/diasSemana (ver 027_bloque_dias_semana.sql). Agrupar
+// por días es pura comodidad de esta pantalla, para no repetir la misma selección de días
+// bloque por bloque (Administración: 2 bloques L-V con los mismos días + 1 el sábado).
+// Reutilizada también para MOSTRAR el horario en la tabla, no solo para el form de edición.
+function agruparBloques(bloquesApi) {
+  if (!bloquesApi || bloquesApi.length === 0) return [nuevoGrupoVacio()];
+  const grupos = [];
+  for (const b of bloquesApi) {
+    const dias = b.dias_semana ?? TODOS_LOS_DIAS;
+    const ultimo = grupos[grupos.length - 1];
+    if (ultimo && mismosDias(ultimo.dias, dias)) {
+      ultimo.bloques.push({ horaInicio: b.hora_inicio, horaFin: b.hora_fin });
+    } else {
+      grupos.push({ dias: [...dias], bloques: [{ horaInicio: b.hora_inicio, horaFin: b.hora_fin }] });
+    }
+  }
+  return grupos;
+}
+
+function aplanarGrupos(grupos) {
+  return grupos.flatMap((g) => g.bloques.map((b) => ({ ...b, diasSemana: g.dias })));
+}
+
+// Ningún día puede estar en dos grupos a la vez — sería ambiguo contra qué horario medir
+// el atraso ese día. Se valida acá (mensaje claro antes de mandar el request) además de
+// en el backend (que rechaza el guardado igual si esto se saltea).
+function diasRepetidosEntreGrupos(grupos) {
+  const vistos = new Set();
+  for (const g of grupos) {
+    for (const d of g.dias) {
+      if (vistos.has(d)) return true;
+      vistos.add(d);
+    }
+  }
+  return false;
+}
+
+function formatearDias(dias) {
+  if (dias.length === 7) return null; // aplica todos los días: no agregar ruido visual
+  const ordenados = [...dias].sort((a, b) => a - b);
+  const corta = (d) => DIAS_SEMANA.find((x) => x.valor === d).corta;
+  const consecutivos = ordenados.length > 1 && ordenados.every((d, i) => i === 0 || d === ordenados[i - 1] + 1);
+  return consecutivos ? `${corta(ordenados[0])}-${corta(ordenados.at(-1))}` : ordenados.map(corta).join('');
+}
+
+// Un grupo = un conjunto de días + su propio horario (1 bloque corrido, o 2 con corte al
+// mediodía). Por defecto un área tiene un solo grupo con los 7 días — "Agregar horario
+// para otros días" (en GruposHorarioInputs) suma otro grupo para el caso de Administración:
+// lunes a viernes un horario, sábado otro, domingo ninguno (no se le tilda ningún día).
+function GrupoInputs({ grupo, onChange, onQuitar, permitirQuitar }) {
+  const discontinuo = grupo.bloques.length > 1;
 
   function actualizarBloque(i, campo, valor) {
-    const nuevos = bloques.map((b, idx) =>
-      idx === i ? { ...b, [campo]: valor } : b
-    );
-    onChange(nuevos);
+    const bloques = grupo.bloques.map((b, idx) => (idx === i ? { ...b, [campo]: valor } : b));
+    onChange({ ...grupo, bloques });
   }
 
   function alternarDiscontinuo(marcado) {
-    if (marcado) {
-      onChange([bloques[0] ?? BLOQUE_VACIO, BLOQUE_VACIO]);
-    } else {
-      onChange([bloques[0] ?? BLOQUE_VACIO]);
-    }
+    const bloques = marcado
+      ? [grupo.bloques[0] ?? { ...BLOQUE_VACIO }, { ...BLOQUE_VACIO }]
+      : [grupo.bloques[0] ?? { ...BLOQUE_VACIO }];
+    onChange({ ...grupo, bloques });
+  }
+
+  function alternarDia(valor) {
+    const dias = grupo.dias.includes(valor)
+      ? grupo.dias.filter((d) => d !== valor)
+      : [...grupo.dias, valor].sort((a, b) => a - b);
+    onChange({ ...grupo, dias });
   }
 
   function campoBloque(i, etiquetaEntrada, etiquetaSalida) {
-    const b = bloques[i] ?? BLOQUE_VACIO;
+    const b = grupo.bloques[i] ?? BLOQUE_VACIO;
     return (
       <div className="bloque-fila">
         <label className="campo campo-inline">
@@ -58,7 +126,20 @@ function BloqueInputs({ bloques, onChange }) {
   }
 
   return (
-    <div className="bloques-horario">
+    <div className="grupo-horario">
+      <div className="dias-semana-selector">
+        {DIAS_SEMANA.map((d) => (
+          <label
+            key={d.valor}
+            className={`dia-toggle ${grupo.dias.includes(d.valor) ? 'activo' : ''}`}
+            title={d.nombre}
+          >
+            <input type="checkbox" checked={grupo.dias.includes(d.valor)} onChange={() => alternarDia(d.valor)} />
+            {d.corta}
+          </label>
+        ))}
+      </div>
+
       {campoBloque(0, discontinuo ? 'Entrada mañana' : 'Entrada', discontinuo ? 'Salida almuerzo' : 'Salida')}
 
       <label className="campo campo-toggle campo-discontinuo">
@@ -71,6 +152,56 @@ function BloqueInputs({ bloques, onChange }) {
       </label>
 
       {discontinuo && campoBloque(1, 'Entrada tarde', 'Salida tarde')}
+
+      {permitirQuitar && (
+        <button
+          type="button"
+          className="boton-icono grupo-horario-quitar"
+          title="Quitar este horario"
+          aria-label="Quitar este horario"
+          onClick={onQuitar}
+        >
+          <IconEliminar />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Un área tiene 1+ grupos de horario, cada uno para un conjunto de días distinto — por
+// defecto un solo grupo con los 7 días (el caso de siempre: mismo horario todo el
+// tiempo). "Agregar horario para otros días" es lo que habilita el caso de Administración
+// (semana + sábado con horarios distintos, domingo sin ninguno).
+function GruposHorarioInputs({ grupos, onChange }) {
+  function actualizarGrupo(i, grupo) {
+    onChange(grupos.map((g, idx) => (idx === i ? grupo : g)));
+  }
+  function agregarGrupo() {
+    onChange([...grupos, nuevoGrupoVacio()]);
+  }
+  function quitarGrupo(i) {
+    onChange(grupos.filter((_, idx) => idx !== i));
+  }
+
+  return (
+    <div className="grupos-horario">
+      {grupos.map((g, i) => (
+        <GrupoInputs
+          key={i}
+          grupo={g}
+          onChange={(g2) => actualizarGrupo(i, g2)}
+          onQuitar={() => quitarGrupo(i)}
+          permitirQuitar={grupos.length > 1}
+        />
+      ))}
+      <button type="button" className="boton-agregar-grupo" onClick={agregarGrupo}>
+        <IconCrear /> Agregar horario para otros días
+      </button>
+      <span className="ayuda">
+        Por defecto el horario de arriba aplica todos los días. Agregá otro grupo si, por
+        ejemplo, el sábado tiene un horario distinto — un día sin ningún grupo tildado
+        queda sin turno ese día (no cuenta atraso, RRHH lo revisa si alguien marca igual).
+      </span>
     </div>
   );
 }
@@ -93,9 +224,17 @@ function RequiereSalidaToggle({ requiereSalida, onChange }) {
   );
 }
 
+// Muestra los días junto al horario solo cuando el grupo NO aplica todos los días — el
+// caso común (un solo horario, todos los días) queda igual que antes, sin ruido nuevo.
 function formatearBloques(bloques) {
   if (!bloques || bloques.length === 0) return '—';
-  return bloques.map((b) => `${b.hora_inicio}–${b.hora_fin}`).join('  /  ');
+  return agruparBloques(bloques)
+    .map((g) => {
+      const dias = formatearDias(g.dias);
+      const horarios = g.bloques.map((b) => `${b.horaInicio}–${b.horaFin}`).join(' / ');
+      return dias ? `${dias} ${horarios}` : horarios;
+    })
+    .join('   •   ');
 }
 
 function Turnos() {
@@ -104,12 +243,12 @@ function Turnos() {
   const [error, setError] = useState(null);
   const [editandoId, setEditandoId] = useState(null);
   const [nombreEdit, setNombreEdit] = useState('');
-  const [formBloques, setFormBloques] = useState([{ horaInicio: '', horaFin: '' }]);
+  const [formGrupos, setFormGrupos] = useState([nuevoGrupoVacio()]);
   const [formDescuento, setFormDescuento] = useState(true);
   const [formPagoDiario, setFormPagoDiario] = useState(true);
   const [formRequiereSalida, setFormRequiereSalida] = useState(true);
   const [modalNueva, setModalNueva] = useState(false);
-  const [formNueva, setFormNueva] = useState({ nombre: '', bloques: [{ horaInicio: '', horaFin: '' }], aplicaDescuento: true, aplicaPagoDiario: true, requiereSalida: true });
+  const [formNueva, setFormNueva] = useState({ nombre: '', grupos: [nuevoGrupoVacio()], aplicaDescuento: true, aplicaPagoDiario: true, requiereSalida: true });
   const [errorModal, setErrorModal] = useState(null);
   const [margen, setMargen] = useState('');
   const [pagoDia, setPagoDia] = useState('');
@@ -153,12 +292,7 @@ function Turnos() {
     setEditandoId(area.id);
     setNombreEdit(area.nombre);
     setErrorModal(null);
-    // Convertir bloques del API (hora_inicio/hora_fin) al formato del form (horaInicio/horaFin).
-    const bloquesForm = (area.bloques || []).map((b) => ({
-      horaInicio: b.hora_inicio,
-      horaFin: b.hora_fin,
-    }));
-    setFormBloques(bloquesForm.length > 0 ? bloquesForm : [{ horaInicio: '', horaFin: '' }]);
+    setFormGrupos(agruparBloques(area.bloques));
     setFormDescuento(area.aplica_descuento !== false);
     setFormPagoDiario(area.aplica_pago_diario !== false);
     setFormRequiereSalida(area.requiere_salida !== false);
@@ -167,13 +301,17 @@ function Turnos() {
   async function guardar(e) {
     e.preventDefault();
     if (guardandoRef.current) return;
+    if (diasRepetidosEntreGrupos(formGrupos)) {
+      setErrorModal('Un mismo día no puede estar en dos horarios distintos del área.');
+      return;
+    }
     guardandoRef.current = true;
     setErrorModal(null);
     setGuardando(true);
     try {
       await request(`/turnos/${editandoId}`, {
         method: 'PUT',
-        body: { nombre: nombreEdit, bloques: formBloques, aplicaDescuento: formDescuento, aplicaPagoDiario: formPagoDiario, requiereSalida: formRequiereSalida },
+        body: { nombre: nombreEdit, bloques: aplanarGrupos(formGrupos), aplicaDescuento: formDescuento, aplicaPagoDiario: formPagoDiario, requiereSalida: formRequiereSalida },
       });
       setEditandoId(null);
       cargar();
@@ -186,7 +324,7 @@ function Turnos() {
   }
 
   function abrirNueva() {
-    setFormNueva({ nombre: '', bloques: [{ horaInicio: '', horaFin: '' }], aplicaDescuento: true, aplicaPagoDiario: true, requiereSalida: true });
+    setFormNueva({ nombre: '', grupos: [nuevoGrupoVacio()], aplicaDescuento: true, aplicaPagoDiario: true, requiereSalida: true });
     setErrorModal(null);
     setModalNueva(true);
   }
@@ -194,11 +332,24 @@ function Turnos() {
   async function crearArea(e) {
     e.preventDefault();
     if (creandoRef.current) return;
+    if (diasRepetidosEntreGrupos(formNueva.grupos)) {
+      setErrorModal('Un mismo día no puede estar en dos horarios distintos del área.');
+      return;
+    }
     creandoRef.current = true;
     setErrorModal(null);
     setGuardando(true);
     try {
-      await request('/turnos', { method: 'POST', body: formNueva });
+      await request('/turnos', {
+        method: 'POST',
+        body: {
+          nombre: formNueva.nombre,
+          bloques: aplanarGrupos(formNueva.grupos),
+          aplicaDescuento: formNueva.aplicaDescuento,
+          aplicaPagoDiario: formNueva.aplicaPagoDiario,
+          requiereSalida: formNueva.requiereSalida,
+        },
+      });
       setModalNueva(false);
       cargar();
     } catch (err) {
@@ -342,7 +493,7 @@ function Turnos() {
               required
             />
           </label>
-          <BloqueInputs bloques={formBloques} onChange={setFormBloques} />
+          <GruposHorarioInputs grupos={formGrupos} onChange={setFormGrupos} />
           <label className="campo campo-toggle">
             <input
               type="checkbox"
@@ -380,9 +531,9 @@ function Turnos() {
               required
             />
           </label>
-          <BloqueInputs
-            bloques={formNueva.bloques}
-            onChange={(bloques) => setFormNueva({ ...formNueva, bloques })}
+          <GruposHorarioInputs
+            grupos={formNueva.grupos}
+            onChange={(grupos) => setFormNueva({ ...formNueva, grupos })}
           />
           <label className="campo campo-toggle">
             <input

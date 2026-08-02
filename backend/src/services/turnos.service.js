@@ -17,6 +17,10 @@ function minutosDeHora(horaValue) {
   return h * 60 + m;
 }
 
+function diasSeSuperponen(a, b) {
+  return a.some((d) => b.includes(d));
+}
+
 function validarBloques(bloques) {
   if (!Array.isArray(bloques) || bloques.length === 0) {
     throw new TurnoError('Se requiere al menos un bloque horario');
@@ -30,14 +34,27 @@ function validarBloques(bloques) {
     if (minutosDeHora(b.horaFin) <= minutosDeHora(b.horaInicio)) {
       throw new TurnoError(`Bloque ${i + 1}: horaFin debe ser posterior a horaInicio (ningún bloque cruza medianoche)`);
     }
+    if (!Array.isArray(b.diasSemana) || b.diasSemana.length === 0) {
+      throw new TurnoError(`Bloque ${i + 1}: debe indicar al menos un día de la semana`);
+    }
+    if (b.diasSemana.some((d) => !Number.isInteger(d) || d < 1 || d > 7)) {
+      throw new TurnoError(`Bloque ${i + 1}: días de la semana inválidos (deben ser 1 a 7)`);
+    }
   }
 
-  // Verificar orden cronológico y que no se solapen.
+  // Verificar orden cronológico y que no se solapen — pero SOLO entre bloques que
+  // comparten al menos un día de la semana. Un área puede tener el mismo rango horario
+  // (o uno que "se solaparía" en un eje de tiempo plano) en dos bloques distintos si son
+  // de días distintos, ej. lunes a viernes 08:00-12:00 y sábado 09:00-13:00 — no son
+  // ambiguos entre sí porque nunca aplican el mismo día.
   for (let i = 1; i < bloques.length; i++) {
-    const finAnterior = minutosDeHora(bloques[i - 1].horaFin);
-    const inicioActual = minutosDeHora(bloques[i].horaInicio);
-    if (inicioActual <= finAnterior) {
-      throw new TurnoError(`Bloque ${i + 1} se solapa o no sigue al bloque ${i}. El inicio (${bloques[i].horaInicio}) debe ser posterior al fin del bloque anterior (${bloques[i - 1].horaFin}).`);
+    for (let j = 0; j < i; j++) {
+      if (!diasSeSuperponen(bloques[i].diasSemana, bloques[j].diasSemana)) continue;
+      const finAnterior = minutosDeHora(bloques[j].horaFin);
+      const inicioActual = minutosDeHora(bloques[i].horaInicio);
+      if (inicioActual <= finAnterior) {
+        throw new TurnoError(`Bloque ${i + 1} se solapa con el bloque ${j + 1} en un día que comparten. El inicio (${bloques[i].horaInicio}) debe ser posterior al fin del otro bloque (${bloques[j].horaFin}).`);
+      }
     }
   }
 }

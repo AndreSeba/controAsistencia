@@ -63,10 +63,16 @@ function verificarTipoSolicitado(tipoSolicitado, tipoReal) {
 }
 
 // El atraso se calcula contra el horario del BLOQUE más cercano del ÁREA del empleado
-// si tiene una asignada. Fallback: turno+bloque más cercano a la hora de llegada, para
-// empleados sin área. Solo lecturas — devuelve null si no se pudo atribuir, sin lanzar:
-// el catálogo vacío únicamente es un error si la marcación termina siendo una ENTRADA,
-// y eso recién se resuelve dentro de la transacción.
+// si tiene una asignada, entre los bloques que aplican HOY (día de la semana — ver
+// horario.util.js). Fallback: turno+bloque más cercano a la hora de llegada, para
+// empleados sin área. Solo lecturas — devuelve null si no se pudo atribuir NINGÚN turno,
+// sin lanzar: el catálogo vacío únicamente es un error si la marcación termina siendo una
+// ENTRADA, y eso recién se resuelve dentro de la transacción.
+//
+// `bloque` puede volver null aunque `turno` no lo sea: significa que el área existe y
+// tiene bloques configurados, pero ninguno aplica hoy (ej. Administración un domingo) —
+// no es un error de configuración, es un día sin turno para esa área. El llamador lo
+// trata como señal blanda (sin atraso, `requiere_revision`), nunca bloquea la marcación.
 async function resolverAtribucion(empleadoId, timestampUtc) {
   let turno = null;
   let bloque = null;
@@ -85,7 +91,7 @@ async function resolverAtribucion(empleadoId, timestampUtc) {
       bloque = resultado.bloque;
     }
   }
-  if (!turno || !bloque) return null;
+  if (!turno) return null;
   return { turno, bloque };
 }
 
@@ -196,6 +202,7 @@ async function registrar({
     let minutosAtraso = null;
     let minutosAnticipacion = null;
     let aplicaDescuento = true; // default
+    let sinBloqueHoy = false; // área con horario por día de semana que hoy no aplica (ej. domingo)
     if (tipo === 'ENTRADA') {
       if (!atribucion) {
         // Catálogo de turnos vacío: sin esto, turno.id revienta con un 500 sin pista.
@@ -210,8 +217,15 @@ async function registrar({
         { empleadoId, sucursalId, fecha, turnoCatalogoId: turno.id },
         client
       );
-      minutosAtraso = horarioUtil.calcularMinutosAtraso(timestampUtc, bloque);
-      minutosAnticipacion = horarioUtil.calcularMinutosAnticipacion(timestampUtc, bloque);
+      // Sin bloque para hoy (ej. área que no trabaja domingo): no hay contra qué medir
+      // el atraso — se deja null (nunca se inventa un número) y la marcación queda
+      // igual para revisión de RRHH, señal blanda como el resto.
+      if (bloque) {
+        minutosAtraso = horarioUtil.calcularMinutosAtraso(timestampUtc, bloque);
+        minutosAnticipacion = horarioUtil.calcularMinutosAnticipacion(timestampUtc, bloque);
+      } else {
+        sinBloqueHoy = true;
+      }
     } else {
       turnoJornadaId = jornadaAbierta.id;
       aplicaDescuento = jornadaAbierta.aplica_descuento !== false;
@@ -223,7 +237,7 @@ async function registrar({
     // reto de liveness — confianza reducida por diseño, RRHH la confirma a mano.
     const atrasoExcesivo = minutosAtraso != null && minutosAtraso > UMBRAL_REVISION_ATRASO_MIN;
     const demasiadoTemprano = minutosAnticipacion != null && minutosAnticipacion > margenAnticipacionMin;
-    const estado = (offlineMode || !identidadVerificada || !dentroGeocerca || atrasoExcesivo || demasiadoTemprano)
+    const estado = (offlineMode || !identidadVerificada || !dentroGeocerca || atrasoExcesivo || demasiadoTemprano || sinBloqueHoy)
       ? 'requiere_revision'
       : 'registrada';
 

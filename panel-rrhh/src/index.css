@@ -1253,6 +1253,73 @@ details[open] .tarifas-contenido {
   margin: 4px 0 10px;
 }
 
+/* ── Grupos de horario por día de la semana ── */
+.grupos-horario {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.grupo-horario {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--accent-bg);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  position: relative;
+}
+
+.grupo-horario .bloques-horario {
+  margin-bottom: 0;
+}
+
+.grupo-horario .bloque-fila {
+  background: var(--bg-card);
+}
+
+.dias-semana-selector {
+  display: flex;
+  gap: 4px;
+}
+
+.dia-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.dia-toggle input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.dia-toggle.activo {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.grupo-horario-quitar {
+  align-self: flex-end;
+}
+
+.boton-agregar-grupo {
+  align-self: flex-start;
+}
+
 /* ── Badges ── */
 .badge {
   display: inline-block;

@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   minutosDelDiaLocal,
   fechaLocal,
+  diaSemanaLocal,
   atribuirTurno,
   atribuirBloque,
   calcularMinutosAtraso,
@@ -103,4 +104,50 @@ test('bloquePendienteTrasSalida NO reusa atribuirBloque (que elegiría el bloque
   const salidaMediodia = new Date('2026-06-20T15:50:00Z'); // 11:50 local
   assert.equal(atribuirBloque(salidaMediodia, BLOQUES_PARTIDO).numero_bloque, 2);
   assert.equal(bloquePendienteTrasSalida(salidaMediodia, BLOQUES_PARTIDO), '14:30:00');
+});
+
+// ── Horario por día de la semana (2026-07-31) ─────────────────────────────────────────
+// Caso real: Administración lunes a viernes horario partido, sábado un solo bloque
+// distinto (09:00-13:00), domingo no trabaja. 2026-06-20 es sábado, 2026-06-21 domingo,
+// 2026-06-22 lunes (Bolivia, UTC-4) — verificado con Date.UTC antes de escribir el test,
+// no asumido de memoria.
+test('diaSemanaLocal devuelve ISO 1=lunes..7=domingo en hora de Bolivia', () => {
+  assert.equal(diaSemanaLocal(new Date('2026-06-22T15:00:00Z')), 1); // lunes 11:00 local
+  assert.equal(diaSemanaLocal(new Date('2026-06-20T15:00:00Z')), 6); // sábado 11:00 local
+  assert.equal(diaSemanaLocal(new Date('2026-06-21T15:00:00Z')), 7); // domingo 11:00 local
+  // Cruce de medianoche: 2026-06-20T02:00Z son las 22:00 del 2026-06-19 en Bolivia (viernes).
+  assert.equal(diaSemanaLocal(new Date('2026-06-20T02:00:00Z')), 5);
+});
+
+const BLOQUES_ADMINISTRACION = [
+  { numero_bloque: 1, hora_inicio: '08:00:00', hora_fin: '12:00:00', dias_semana: [1, 2, 3, 4, 5] },
+  { numero_bloque: 2, hora_inicio: '14:30:00', hora_fin: '18:30:00', dias_semana: [1, 2, 3, 4, 5] },
+  { numero_bloque: 3, hora_inicio: '09:00:00', hora_fin: '13:00:00', dias_semana: [6] },
+];
+
+test('atribuirBloque respeta el día de la semana, no solo la hora más cercana', () => {
+  // Lunes 08:05 -> bloque 1 (L-V mañana), ignora el de sábado aunque sea 1 sola opción hoy.
+  const lunes = new Date('2026-06-22T12:05:00Z'); // 08:05 local
+  assert.equal(atribuirBloque(lunes, BLOQUES_ADMINISTRACION).numero_bloque, 1);
+
+  // Sábado 09:30 -> bloque 3 (el único que aplica), aunque el bloque 1 (08:00, L-V) esté
+  // más cerca en minutos "de reloj" que el 3 no importa: hoy el 1 no aplica.
+  const sabado = new Date('2026-06-20T13:30:00Z'); // 09:30 local
+  assert.equal(atribuirBloque(sabado, BLOQUES_ADMINISTRACION).numero_bloque, 3);
+
+  // Domingo: ningún bloque aplica -> null, nunca un bloque equivocado.
+  const domingo = new Date('2026-06-21T14:00:00Z'); // 10:00 local
+  assert.equal(atribuirBloque(domingo, BLOQUES_ADMINISTRACION), null);
+});
+
+test('bloquePendienteTrasSalida filtra por día antes de contar bloques (área con 3 en total)', () => {
+  // Sábado: hoy solo aplica 1 bloque (el 3) de los 3 que tiene el área en total — sin
+  // filtrar por día, bloques.length sería 3 y el aviso nunca se dispararía para nadie,
+  // ni siquiera entre semana (regresión real posible al agregar el bloque de sábado).
+  const salidaSabado = new Date('2026-06-20T14:00:00Z'); // 10:00 local, sábado
+  assert.equal(bloquePendienteTrasSalida(salidaSabado, BLOQUES_ADMINISTRACION), null);
+
+  // Entre semana sigue funcionando igual que con un área de 2 bloques nomás.
+  const salidaLunesMediodia = new Date('2026-06-22T15:50:00Z'); // 11:50 local, lunes
+  assert.equal(bloquePendienteTrasSalida(salidaLunesMediodia, BLOQUES_ADMINISTRACION), '14:30:00');
 });

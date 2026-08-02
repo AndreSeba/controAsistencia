@@ -8,7 +8,8 @@ async function listarCatalogo() {
              json_build_object(
                'numero_bloque', tb.numero_bloque,
                'hora_inicio', to_char(tb.hora_inicio, 'HH24:MI'),
-               'hora_fin', to_char(tb.hora_fin, 'HH24:MI')
+               'hora_fin', to_char(tb.hora_fin, 'HH24:MI'),
+               'dias_semana', tb.dias_semana
              ) ORDER BY tb.numero_bloque
            ) AS bloques
     FROM turno_catalogo tc
@@ -31,7 +32,8 @@ async function obtenerCatalogoPorId(id, executor = getPool()) {
               json_build_object(
                 'numero_bloque', tb.numero_bloque,
                 'hora_inicio', to_char(tb.hora_inicio, 'HH24:MI'),
-                'hora_fin', to_char(tb.hora_fin, 'HH24:MI')
+                'hora_fin', to_char(tb.hora_fin, 'HH24:MI'),
+                'dias_semana', tb.dias_semana
               ) ORDER BY tb.numero_bloque
             ) AS bloques
      FROM turno_catalogo tc
@@ -59,9 +61,9 @@ async function crearCatalogo({ nombre, bloques, aplicaDescuento, aplicaPagoDiari
 
   for (let i = 0; i < bloques.length; i++) {
     await executor.query(
-      `INSERT INTO turno_bloque (turno_catalogo_id, numero_bloque, hora_inicio, hora_fin)
-       VALUES ($1, $2, $3, $4)`,
-      [turnoId, i + 1, bloques[i].horaInicio, bloques[i].horaFin]
+      `INSERT INTO turno_bloque (turno_catalogo_id, numero_bloque, hora_inicio, hora_fin, dias_semana)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [turnoId, i + 1, bloques[i].horaInicio, bloques[i].horaFin, bloques[i].diasSemana]
     );
   }
 
@@ -94,9 +96,9 @@ async function actualizar(id, { nombre, bloques, aplicaDescuento, aplicaPagoDiar
 
   for (let i = 0; i < bloques.length; i++) {
     await executor.query(
-      `INSERT INTO turno_bloque (turno_catalogo_id, numero_bloque, hora_inicio, hora_fin)
-       VALUES ($1, $2, $3, $4)`,
-      [id, i + 1, bloques[i].horaInicio, bloques[i].horaFin]
+      `INSERT INTO turno_bloque (turno_catalogo_id, numero_bloque, hora_inicio, hora_fin, dias_semana)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [id, i + 1, bloques[i].horaInicio, bloques[i].horaFin, bloques[i].diasSemana]
     );
   }
 }
