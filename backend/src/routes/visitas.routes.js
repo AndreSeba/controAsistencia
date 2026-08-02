@@ -11,6 +11,7 @@ router.post('/', verificarDispositivo, visitasController.registrar);
 
 // Panel RRHH: reporte por JWT + RBAC.
 router.get('/resumen', verificarAccessToken, requierePermiso('visitas', 'puede_ver'), visitasController.resumen);
+router.get('/export', verificarAccessToken, requierePermiso('visitas', 'puede_ver'), visitasController.exportar);
 router.get('/', verificarAccessToken, requierePermiso('visitas', 'puede_ver'), visitasController.listar);
 
 module.exports = router;

@@ -1,6 +1,7 @@
 const marcacionesService = require('../services/marcaciones.service');
 const livenessService = require('../services/liveness.service');
 const exportExcelService = require('../services/exportExcel.service');
+const horarioUtil = require('../utils/horario.util');
 
 async function retoLiveness(req, res, next) {
   try {
@@ -71,20 +72,30 @@ async function exportar(req, res, next) {
   try {
     const marcaciones = await marcacionesService.listar(filtrosDeQuery(req.query));
 
+    // Fecha y hora en hora local (Bolivia), no la hora cruda del servidor (UTC) — el
+    // panel ya mostraba la hora local, pero solo con conversión del navegador, nunca
+    // llegó al export. Caso real que lo disparó: una entrada a las 14:58 UTC (10:58
+    // Bolivia) salía en el Excel como 14:58, 4 horas adelantada.
+    const filas = marcaciones.map((m) => {
+      const { fecha, hora } = horarioUtil.fechaHoraLocalTexto(new Date(m.timestamp_utc));
+      return { ...m, fecha_local: fecha, hora_local: hora };
+    });
+
     const buffer = await exportExcelService.generarBuffer('Marcaciones', [
       { header: 'Empleado', key: 'empleado_nombre', width: 22 },
       { header: 'Apellido', key: 'empleado_apellido', width: 22 },
       { header: 'Documento', key: 'empleado_documento_nro', width: 16 },
       { header: 'Sucursal', key: 'sucursal_nombre', width: 22 },
       { header: 'Tipo', key: 'tipo', width: 10 },
-      { header: 'Fecha/hora UTC', key: 'timestamp_utc', width: 22 },
+      { header: 'Fecha', key: 'fecha_local', width: 14 },
+      { header: 'Hora', key: 'hora_local', width: 12 },
       { header: 'Dentro geocerca', key: 'dentro_geocerca', width: 14 },
       { header: 'Identidad verificada', key: 'identidad_verificada', width: 18 },
       { header: 'Atraso (min)', key: 'minutos_atraso', width: 14 },
       { header: 'Anticipación (min)', key: 'minutos_anticipacion', width: 18 },
       { header: 'Estado', key: 'estado', width: 18 },
       { header: 'Revisado', key: 'revisado', width: 12 },
-    ], marcaciones);
+    ], filas);
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename="marcaciones.xlsx"');

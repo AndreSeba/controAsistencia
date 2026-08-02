@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../lib/AuthContext';
+import { descargarBlob } from '../lib/api';
 import { usePaginacion } from '../hooks/usePaginacion';
 import Paginacion from '../components/Paginacion';
+import { IconDescargar } from './Icons';
 
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
@@ -106,6 +108,16 @@ function VisitasSupervisores() {
     setFechaDia('');
   }
 
+  async function descargarExcel() {
+    setError(null);
+    try {
+      const blob = await request(`/visitas/export?fechaInicio=${inicio}&fechaFin=${fin}`, { comoBlob: true });
+      descargarBlob(blob, 'visitas.xlsx');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   return (
     <div>
       <div className="ap-controles">
@@ -123,6 +135,7 @@ function VisitasSupervisores() {
             )}
           </span>
         </label>
+        <button type="button" onClick={descargarExcel}><IconDescargar /> Descargar Excel</button>
       </div>
 
       {error && <p className="error">{error}</p>}

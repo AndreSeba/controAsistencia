@@ -11,6 +11,19 @@ function fechaLocal(timestampUtc) {
   return local.toISOString().slice(0, 10);
 }
 
+// Fecha y hora en hora local (Bolivia), como texto listo para mostrar — usado en
+// exports a Excel, donde no hay margen para que el navegador "arregle" el timezone como
+// hace el panel. Formato DD/MM/YYYY (igual al que ya usa el panel) y HH:MM:SS 24hs (evita
+// la ambigüedad de AM/PM al ordenar/filtrar en una planilla).
+function fechaHoraLocalTexto(timestampUtc) {
+  const local = new Date(timestampUtc.getTime() + OFFSET_BOLIVIA_MIN * 60 * 1000);
+  const pad = (n) => String(n).padStart(2, '0');
+  return {
+    fecha: `${pad(local.getUTCDate())}/${pad(local.getUTCMonth() + 1)}/${local.getUTCFullYear()}`,
+    hora: `${pad(local.getUTCHours())}:${pad(local.getUTCMinutes())}:${pad(local.getUTCSeconds())}`,
+  };
+}
+
 // pg devuelve TIME como string 'HH:MM:SS'; el branch Date queda por compatibilidad histórica (mssql).
 function minutosDeHora(horaValue) {
   if (horaValue instanceof Date) {
@@ -131,6 +144,7 @@ module.exports = {
   minutosDelDiaLocal,
   minutosDeHora,
   fechaLocal,
+  fechaHoraLocalTexto,
   diaSemanaLocal,
   bloqueAplicaHoy,
   atribuirTurno,

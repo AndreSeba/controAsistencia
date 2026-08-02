@@ -70,11 +70,6 @@ function validarRango(fechaInicio, fechaFin) {
   }
 }
 
-async function resumen({ fechaInicio, fechaFin }) {
-  validarRango(fechaInicio, fechaFin);
-  return visitasRepo.resumenPorRango(fechaInicio, fechaFin);
-}
-
 // Arma pares Entrada/Salida por (empleado, sucursal, día local): permite ver a
 // qué hora llegó y a qué hora se fue. Si un día se queda una Entrada sin su
 // Salida (se fue sin escanear de nuevo, o todavía está en la sucursal), el par
@@ -130,6 +125,43 @@ async function listar({ fechaInicio, fechaFin }) {
   validarRango(fechaInicio, fechaFin);
   const filas = await visitasRepo.listarPorRango(fechaInicio, fechaFin);
   return emparejarVisitas(filas);
+}
+
+// El resumen cuenta VISITAS (pares Entrada/Salida), no escaneos sueltos — antes contaba
+// filas crudas de visita_supervisor con un COUNT(*) en SQL, así que una visita completa
+// (Entrada + Salida) se contaba como 2 en vez de 1. Caso real que lo disparó: Roger con
+// una visita completa mostraba "2" (debía ser "1"); Aracely con una completa + una
+// incompleta (entrada sin salida) mostraba "3" (debía ser "2"). Reusa el mismo
+// emparejado que ya arma bien el detalle, en vez de una cuenta aparte en SQL.
+function agruparResumen(pares) {
+  const grupos = new Map();
+  for (const p of pares) {
+    const clave = `${p.empleado_id}|${p.sucursal_id}`;
+    if (!grupos.has(clave)) {
+      grupos.set(clave, {
+        empleado_id: p.empleado_id,
+        nombre: p.nombre,
+        apellido: p.apellido,
+        sucursal_id: p.sucursal_id,
+        sucursal_nombre: p.sucursal_nombre,
+        visitas: 0,
+        ultima_visita: null,
+      });
+    }
+    const g = grupos.get(clave);
+    g.visitas += 1;
+    const ts = p.entrada_timestamp ?? p.salida_timestamp;
+    if (!g.ultima_visita || new Date(ts) > new Date(g.ultima_visita)) g.ultima_visita = ts;
+  }
+  return Array.from(grupos.values()).sort((a, b) =>
+    a.apellido.localeCompare(b.apellido) || a.nombre.localeCompare(b.nombre) || a.sucursal_nombre.localeCompare(b.sucursal_nombre)
+  );
+}
+
+async function resumen({ fechaInicio, fechaFin }) {
+  validarRango(fechaInicio, fechaFin);
+  const filas = await visitasRepo.listarPorRango(fechaInicio, fechaFin);
+  return agruparResumen(emparejarVisitas(filas));
 }
 
 module.exports = { registrar, resumen, listar, VisitaError };

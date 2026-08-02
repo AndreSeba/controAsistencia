@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   minutosDelDiaLocal,
   fechaLocal,
+  fechaHoraLocalTexto,
   diaSemanaLocal,
   atribuirTurno,
   atribuirBloque,
@@ -25,6 +26,20 @@ test('minutosDelDiaLocal convierte UTC a Bolivia (UTC-4)', () => {
 test('fechaLocal usa la fecha calendario de Bolivia, no la de UTC', () => {
   assert.equal(fechaLocal(new Date('2026-06-20T02:00:00Z')), '2026-06-19');
   assert.equal(fechaLocal(new Date('2026-06-20T05:00:00Z')), '2026-06-20');
+});
+
+test('fechaHoraLocalTexto da fecha y hora en Bolivia, no en UTC (caso real: Mario)', () => {
+  // Caso real de producción que disparó este fix: Mario marcó entrada a las 14:58:36 UTC,
+  // el Excel mostraba esa hora cruda (server/UTC) en vez de 10:58:36 Bolivia.
+  assert.deepEqual(
+    fechaHoraLocalTexto(new Date('2026-08-01T14:58:36.413Z')),
+    { fecha: '01/08/2026', hora: '10:58:36' }
+  );
+  // Cruce de medianoche: 02:00 UTC son las 22:00 del día anterior en Bolivia.
+  assert.deepEqual(
+    fechaHoraLocalTexto(new Date('2026-06-20T02:00:00.000Z')),
+    { fecha: '19/06/2026', hora: '22:00:00' }
+  );
 });
 
 test('atribuirTurno asigna al turno con hora_inicio más cercana', () => {
