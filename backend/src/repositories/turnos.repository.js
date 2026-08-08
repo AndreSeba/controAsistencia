@@ -147,22 +147,26 @@ async function cerrar(id, { salidaMarcada, cierreAutomatico, requiereRevision },
 }
 
 async function listarAbiertasVencidas() {
-  // ABIERTA cuya hora_fin del ÚLTIMO bloque (local Bolivia) ya pasó.
-  // fecha + hora_fin da un TIMESTAMP naive en hora local; se le suma el offset
-  // local->UTC (+4h) y se interpreta explícitamente como UTC para comparar contra
-  // NOW() sin depender del timezone de la sesión.
+  // ABIERTA cuya medianoche (local Bolivia) ya pasó — no el hora_fin del área.
+  //
+  // Antes cerraba apenas pasaba el hora_fin del ÚLTIMO bloque del área (ej. 18:30 en
+  // Administración): alguien que marcaba Entrada tarde y se quedaba trabajando hasta
+  // más tarde de lo esperado se encontraba la jornada ya cerrada sola sin haberse ido,
+  // y al intentar marcar Salida el servidor respondía "no hay una entrada abierta" sin
+  // que la persona entendiera por qué (caso real: Lorena García, 2026-08-04). Cerrar
+  // recién a medianoche le da a cualquiera el resto del día para marcar su propia
+  // salida real, sin depender de si coincide con el horario configurado del área.
+  //
+  // fecha + 1 día da la medianoche siguiente como TIMESTAMP naive en hora local; se le
+  // suma el offset local->UTC (+4h) y se interpreta explícitamente como UTC para
+  // comparar contra NOW() sin depender del timezone de la sesión — mismo patrón que
+  // antes, solo que ya no hace falta el JOIN a turno_catalogo/turno_bloque.
   const pool = getPool();
   const result = await pool.query(`
     SELECT j.id
     FROM turno_jornada j
-    JOIN turno_catalogo tc ON tc.id = j.turno_catalogo_id
-    JOIN LATERAL (
-      SELECT MAX(tb.hora_fin) AS hora_fin_max
-      FROM turno_bloque tb
-      WHERE tb.turno_catalogo_id = tc.id
-    ) ub ON TRUE
     WHERE j.estado = 'ABIERTO'
-      AND ((j.fecha + ub.hora_fin_max) + INTERVAL '4 hours') AT TIME ZONE 'UTC' < NOW()
+      AND ((j.fecha + INTERVAL '1 day') + INTERVAL '4 hours') AT TIME ZONE 'UTC' < NOW()
   `);
   return result.rows;
 }
