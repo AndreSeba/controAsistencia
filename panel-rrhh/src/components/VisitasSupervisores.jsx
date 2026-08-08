@@ -5,11 +5,9 @@ import { usePaginacion } from '../hooks/usePaginacion';
 import Paginacion from '../components/Paginacion';
 import { IconDescargar } from './Icons';
 
-const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-
-function mesHoy() {
+function periodoActual() {
   const d = new Date();
-  return { anio: d.getFullYear(), mes: d.getMonth() + 1 };
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 function rangoMes(anio, mes) {
@@ -68,15 +66,15 @@ function agruparPorFecha(pares) {
 
 function VisitasSupervisores() {
   const { request } = useAuth();
-  const [{ anio, mes }, setPeriodo] = useState(mesHoy);
+  const [periodo, setPeriodo] = useState(periodoActual);
   const [fechaDia, setFechaDia] = useState(''); // '' = todo el mes; con valor filtra ese día
   const [resumen, setResumen] = useState([]);
   const [detalle, setDetalle] = useState([]);
   const [error, setError] = useState(null);
   const [cargando, setCargando] = useState(false);
 
-  const hoy = new Date();
-  const esMesActual = anio === hoy.getFullYear() && mes === hoy.getMonth() + 1;
+  const hoy = periodoActual();
+  const [anio, mes] = periodo.split('-').map(Number);
 
   const { datosPaginados: resPag, paginaActiva: pagR, totalPaginas: totR, irPaginaAnterior: antR, irPaginaSiguiente: sigR, setPagina: setPagR } = usePaginacion(resumen, 10);
   const gruposDetalle = agruparPorFecha(detalle);
@@ -96,15 +94,11 @@ function VisitasSupervisores() {
       .then(([res, det]) => { setResumen(res); setDetalle(det); setPagR(1); setPagD(1); })
       .catch((err) => setError(err.message))
       .finally(() => setCargando(false));
-  }, [anio, mes, fechaDia]);
+  }, [periodo, fechaDia]);
 
-  function navMes(delta) {
-    setPeriodo(({ anio: a, mes: m }) => {
-      let nm = m + delta, na = a;
-      if (nm > 12) { nm = 1; na++; }
-      if (nm < 1)  { nm = 12; na--; }
-      return { anio: na, mes: nm };
-    });
+  function manejarCambioMes(valor) {
+    if (!valor) return; // el navegador puede mandar vacío al escribir a mano; ignorar
+    setPeriodo(valor);
     setFechaDia('');
   }
 
@@ -121,11 +115,10 @@ function VisitasSupervisores() {
   return (
     <div>
       <div className="ap-controles">
-        <div className="mes-nav">
-          <button type="button" onClick={() => navMes(-1)}>◀</button>
-          <span className="mes-label">{MESES[mes - 1]} {anio}</span>
-          <button type="button" onClick={() => navMes(1)} disabled={esMesActual}>▶</button>
-        </div>
+        <label>
+          Mes
+          <input type="month" value={periodo} max={hoy} onChange={(e) => manejarCambioMes(e.target.value)} />
+        </label>
         <label>
           Día
           <span className="filtro-dia">

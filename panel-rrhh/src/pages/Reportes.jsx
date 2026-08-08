@@ -8,8 +8,6 @@ import AsistenciaPersonal from '../components/AsistenciaPersonal';
 import VisitasSupervisores from '../components/VisitasSupervisores';
 import { IconActualizar } from '../components/Icons';
 
-const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-
 function periodoActual() {
   const hoy = new Date();
   return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
@@ -26,15 +24,11 @@ function Reportes() {
   const [periodo, setPeriodo] = useState(periodoActual());
   const [fechaDia, setFechaDia] = useState(''); // '' = todo el mes; con valor filtra ese día
 
-  const [anio, mes] = periodo.split('-').map(Number);
   const hoy = periodoActual();
-  const esMesActual = periodo === hoy;
 
-  function navMes(delta) {
-    let nm = mes + delta, na = anio;
-    if (nm > 12) { nm = 1; na++; }
-    if (nm < 1)  { nm = 12; na--; }
-    setPeriodo(`${na}-${String(nm).padStart(2, '0')}`);
+  function manejarCambioMes(valor) {
+    if (!valor) return; // el navegador puede mandar vacío al escribir a mano; ignorar
+    setPeriodo(valor);
     setFechaDia('');
   }
 
@@ -85,11 +79,10 @@ function Reportes() {
         <h1>Reportes</h1>
         {vista === 'dashboard' && (
           <div className="filtros filtros-fila">
-            <div className="mes-nav">
-              <button type="button" onClick={() => navMes(-1)}>◀</button>
-              <span className="mes-label">{MESES[mes - 1]} {anio}</span>
-              <button type="button" onClick={() => navMes(1)} disabled={esMesActual}>▶</button>
-            </div>
+            <label>
+              Mes
+              <input type="month" value={periodo} max={hoy} onChange={(e) => manejarCambioMes(e.target.value)} />
+            </label>
             <label>
               Día
               <span className="filtro-dia">

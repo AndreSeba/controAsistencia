@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import { IconGuardar, IconEliminar } from './Icons';
 
-const MESES    = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const DIAS_HDR = ['L','M','M','J','V','S','D'];
 const POR_PAGINA = 10;
 
@@ -11,9 +10,9 @@ const TIPOS_NOVEDAD = [
   { value: 'permiso',     label: 'Permiso',       cls: 'permiso' },
 ];
 
-function mesHoy() {
+function periodoActual() {
   const d = new Date();
-  return { anio: d.getFullYear(), mes: d.getMonth() + 1 };
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 function primerDia(anio, mes) {
   return `${anio}-${String(mes).padStart(2,'0')}-01`;
@@ -177,7 +176,8 @@ function TarjetaEmpleado({ emp, jMap, nMap, dias, offset, onClickFalta }) {
 // ── Componente principal ────────────────────────────────────
 function AsistenciaPersonal({ empleados }) {
   const { request } = useAuth();
-  const [{ anio, mes }, setPeriodo] = useState(mesHoy);
+  const [periodo, setPeriodo] = useState(periodoActual);
+  const [anio, mes] = periodo.split('-').map(Number);
   const [jornadasPorEmp, setJornadasPorEmp] = useState({});
   const [novedadesPorEmp, setNovedadesPorEmp] = useState({});
   const [cargando, setCargando]   = useState(false);
@@ -188,8 +188,7 @@ function AsistenciaPersonal({ empleados }) {
   const [guardando, setGuardando] = useState(false);
   const guardandoRef = useRef(false);
 
-  const hoy = new Date();
-  const esPresente = anio === hoy.getFullYear() && mes === hoy.getMonth() + 1;
+  const hoy = periodoActual();
 
   async function cargarDatos() {
     if (!empleados.length) return;
@@ -221,15 +220,11 @@ function AsistenciaPersonal({ empleados }) {
     }
   }
 
-  useEffect(() => { cargarDatos(); }, [anio, mes, empleados.length]);
+  useEffect(() => { cargarDatos(); }, [periodo, empleados.length]);
 
-  function navMes(delta) {
-    setPeriodo(({ anio: a, mes: m }) => {
-      let nm = m + delta, na = a;
-      if (nm > 12) { nm = 1; na++; }
-      if (nm < 1)  { nm = 12; na--; }
-      return { anio: na, mes: nm };
-    });
+  function manejarCambioMes(valor) {
+    if (!valor) return; // el navegador puede mandar vacío al escribir a mano; ignorar
+    setPeriodo(valor);
     setPagina(1);
   }
 
@@ -295,11 +290,10 @@ function AsistenciaPersonal({ empleados }) {
   return (
     <div>
       <div className="ap-controles">
-        <div className="mes-nav">
-          <button type="button" onClick={() => navMes(-1)}>◀</button>
-          <span className="mes-label">{MESES[mes-1]} {anio}</span>
-          <button type="button" onClick={() => navMes(1)} disabled={esPresente}>▶</button>
-        </div>
+        <label>
+          Mes
+          <input type="month" value={periodo} max={hoy} onChange={(e) => manejarCambioMes(e.target.value)} />
+        </label>
         <input
           type="search"
           className="buscador"
